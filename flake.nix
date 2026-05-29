@@ -20,17 +20,30 @@
 
       mkSystemLib =
         system:
+        let
+          renderResultCm = import ./s88/ControlModule/render-result.nix { };
+        in
         {
-          renderer = {
+          renderer = rec {
+            buildWireGuardProviderRenderResult =
+              providerContract:
+              let
+                providerRuntimeModule = {
+                  imports = [ self.nixosModules.default ];
+                  services.network-renderer-wireguard.providerRuntime = {
+                    enable = true;
+                    inherit providerContract;
+                  };
+                };
+              in
+              renderResultCm.build {
+                inherit providerContract;
+                nixosModule = providerRuntimeModule;
+              };
+
             buildWireGuardProviderRuntimeModule =
               providerContract:
-              {
-                imports = [ self.nixosModules.default ];
-                services.network-renderer-wireguard.providerRuntime = {
-                  enable = true;
-                  inherit providerContract;
-                };
-              };
+              (buildWireGuardProviderRenderResult providerContract).artifacts.nixosModules.providerRuntime;
           };
         };
     in

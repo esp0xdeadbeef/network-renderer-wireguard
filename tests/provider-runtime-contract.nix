@@ -97,6 +97,7 @@ let
       nat.ipv6.enable = false;
     }
   );
+  renderResult = flake.libBySystem.${system}.renderer.buildWireGuardProviderRenderResult baseContract;
 in
 {
   valid = {
@@ -108,4 +109,10 @@ in
 
   routedWithNat66Errors = falseAssertionMessages routedWithNat66;
   publicIngressMissingErrors = falseAssertionMessages publicIngressMissing;
+
+  renderResultShape = {
+    inherit (renderResult) rendererClass targetRenderer scope validationHints trace;
+    hasProviderRuntimeModule =
+      builtins.hasAttr "providerRuntime" renderResult.artifacts.nixosModules;
+  };
 }

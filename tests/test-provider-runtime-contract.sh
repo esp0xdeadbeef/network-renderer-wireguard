@@ -34,4 +34,16 @@ public_ingress_errors="$(eval_json publicIngressMissingErrors)"
 grep -Fq "public-ingress mode requires publicIngress contracts" <<<"${public_ingress_errors}" || \
   fail "public-ingress missing-contract assertion missing"
 
+render_result_shape="$(eval_json renderResultShape)"
+for phrase in \
+  '"rendererClass":"provider"' \
+  '"targetRenderer":"wireguard-provider"' \
+  '"providerId":"test-provider"' \
+  '"hasProviderRuntimeModule":true' \
+  '"SMT-WG-VALIDATE-001"' \
+  '"SMS-MOD-014"' \
+  '"CMC-MOD-013"'; do
+  grep -Fq "${phrase}" <<<"${render_result_shape}" || fail "render result shape missing phrase: ${phrase}"
+done
+
 echo "PASS provider-runtime-contract"

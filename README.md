@@ -43,13 +43,28 @@ The flake exports:
 
 - `nixosModules.default`
 - `nixosModules.wireguard-provider-runtime`
+- `libBySystem.<system>.renderer.buildWireGuardProviderRenderResult`
 - `libBySystem.<system>.renderer.buildWireGuardProviderRuntimeModule`
 
 Example library use:
 
 ```nix
+inputs.network-renderer-wireguard.libBySystem.${system}.renderer.buildWireGuardProviderRenderResult providerContract
 inputs.network-renderer-wireguard.libBySystem.${system}.renderer.buildWireGuardProviderRuntimeModule providerContract
 ```
+
+## S88 Layout
+
+The renderer keeps provider projection logic in S88 ControlModule files:
+
+- `s88/ControlModule/provider-contract.nix` validates and normalizes explicit provider contracts.
+- `s88/ControlModule/firewall-nat.nix` projects contract-derived nft/NAT material.
+- `s88/ControlModule/addressing-services.nix` projects DHCPv4 and RA/RDNSS service material.
+- `s88/ControlModule/tunnel-runtime.nix` projects NetworkManager import, dispatcher, and health-check runtime material.
+- `s88/ControlModule/render-result.nix` assembles the generic provider render result.
+
+`modules/wireguard-provider-runtime.nix` binds those ControlModules into a
+NixOS module. It must not regain provider semantics inline.
 
 ## Tests
 
