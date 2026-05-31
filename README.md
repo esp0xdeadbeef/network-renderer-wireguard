@@ -5,6 +5,13 @@ material from explicit provider contracts.
 
 It is a provider renderer, not a forwarding model.
 
+Pipeline position: this repository is downstream of
+`network-control-plane-model` provider contracts and upstream of runtime
+consumers such as NixOS modules or lab orchestration.
+
+Migration, deviation, exception, transition, or temporary compatibility behavior
+must be explicit in the README, tests, and owning layer before it is accepted.
+
 ```text
 network-forwarding-model -> network-control-plane-model -> network-renderer-wireguard
 ```
