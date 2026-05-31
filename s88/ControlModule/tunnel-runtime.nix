@@ -1,5 +1,48 @@
 { lib, pkgs }:
 
+let
+  line = text: ''printf '%s\n' ${lib.escapeShellArg text} >> "$CONF"'';
+  optionalLine = condition: text: lib.optionalString condition "${line text}\n";
+  generatedPeerScript =
+    state:
+    lib.optionalString (state.profileMode == "generated-peer") (
+      let
+        generated = state.generatedPeerForScript;
+        addressLines = lib.concatMapStringsSep "\n" (address: line "Address = ${address}") generated.addresses;
+        dnsLines = optionalLine (generated.dns != [ ]) "DNS = ${lib.concatStringsSep ", " generated.dns}";
+        mtuLines = optionalLine (generated.mtu != null) "MTU = ${toString generated.mtu}";
+        peerScript =
+          peer:
+          lib.concatStringsSep "\n" (
+            [
+              (line "")
+              (line "[Peer]")
+              (line "PublicKey = ${peer.publicKey}")
+              (line "Endpoint = ${peer.endpoint}")
+              (line "AllowedIPs = ${lib.concatStringsSep ", " peer.allowedIPs}")
+            ]
+            ++ lib.optional (peer.presharedKeyFile != null) ''
+              printf 'PresharedKey = %s\n' "$(cat ${lib.escapeShellArg peer.presharedKeyFile})" >> "$CONF"
+            ''
+            ++ lib.optional (peer.persistentKeepalive != null) (
+              line "PersistentKeepalive = ${toString peer.persistentKeepalive}"
+            )
+          );
+        peerScripts = lib.concatMapStringsSep "\n" peerScript generated.peers;
+      in
+      ''
+        mkdir -p "$(dirname "$CONF")"
+        umask 077
+        : > "$CONF"
+        ${line "[Interface]"}
+        printf 'PrivateKey = %s\n' "$(cat ${lib.escapeShellArg generated.privateKeyFile})" >> "$CONF"
+        ${addressLines}
+        ${dnsLines}
+        ${mtuLines}
+        ${peerScripts}
+      ''
+    );
+in
 {
   wanConnectionText =
     state:
@@ -49,7 +92,9 @@
           CONF=${lib.escapeShellArg state.profilePath}
           IFACE=${lib.escapeShellArg state.vpnInterface}
           FORMAT=${lib.escapeShellArg state.profileFormat}
-          UUID_FILE=/run/network-renderer-wireguard.uuid
+          UUID_FILE=${lib.escapeShellArg state.uuidFile}
+
+          ${generatedPeerScript state}
 
           test -s "$CONF" || {
             echo "[wireguard-provider] missing provider profile: $CONF" >&2
@@ -103,7 +148,7 @@
 
         ExecStop = pkgs.writeShellScript "wireguard-provider-dispatcher-stop" ''
           set -euo pipefail
-          UUID_FILE=/run/network-renderer-wireguard.uuid
+          UUID_FILE=${lib.escapeShellArg state.uuidFile}
           if [ -f "$UUID_FILE" ]; then
             UUID=$(cat "$UUID_FILE")
             nmcli con down "$UUID" || true

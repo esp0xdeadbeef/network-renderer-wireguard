@@ -33,6 +33,8 @@ let
     nat66Enable
     dhcp4Enable
     raEnable
+    returnRoutesForLan
+    dnsMode
     ;
 
   dhcp4Config = addressingServicesCm.dhcp4Config providerState;
@@ -89,7 +91,7 @@ in
 
       networkmanager = {
         enable = true;
-        dns = providerState.get [ "networkManager" "dns" ] "default";
+        dns = providerState.get [ "networkManager" "dns" ] dnsMode;
         unmanaged = [
           "interface-name:${lanInterface}"
         ];
@@ -119,6 +121,7 @@ in
         ConfigureWithoutCarrier = true;
         IPv6AcceptRA = false;
       };
+      routes = returnRoutesForLan;
     };
 
     environment.etc."NetworkManager/system-connections/${wanInterface}.nmconnection" = {
