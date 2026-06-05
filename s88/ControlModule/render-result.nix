@@ -8,6 +8,114 @@
       requiredCapabilities ? [ ],
     }:
     let
+      provenanceInput =
+        if builtins.isAttrs (providerContract.provenance or null) then
+          providerContract.provenance
+        else
+          { };
+      provenanceRequested =
+        if builtins.isAttrs (provenanceInput.requested or null) then
+          provenanceInput.requested
+        else
+          { };
+      provenanceSourceClasses =
+        if builtins.isAttrs (provenanceInput.sourceClasses or null) then
+          provenanceInput.sourceClasses
+        else
+          { };
+      redactedSourceClasses =
+        builtins.mapAttrs
+          (name: sourceClass:
+            if name == "protectedInventory" && builtins.isAttrs sourceClass && builtins.hasAttr "secretValue" sourceClass then
+              sourceClass // {
+                secretValue = "<redacted>";
+              }
+            else
+              sourceClass
+          )
+          provenanceSourceClasses;
+      provenanceMissingSourceClasses =
+        let
+          requiredSourceClasses = [
+            "userIntent"
+            "publicInventory"
+            "protectedInventory"
+          ];
+          optionalSourceClasses = [
+            "runtimeFacts"
+            "validationContext"
+          ];
+          missingRequired =
+            builtins.filter
+              (name: !(builtins.hasAttr name provenanceSourceClasses))
+              requiredSourceClasses;
+          missingOptional =
+            builtins.filter
+              (name: !(builtins.hasAttr name provenanceSourceClasses))
+              optionalSourceClasses;
+        in
+        missingRequired
+        ++ (map (name: "${name}:not-declared") missingOptional);
+      requestedScope =
+        provenanceRequested.scope or null;
+      requestedTarget =
+        provenanceRequested.target or null;
+      requestedDerivedScope =
+        if builtins.isAttrs requestedScope then
+          requestedScope
+        else
+          { };
+      outputArtifact = "provider-runtime-output.json";
+      provenanceRecord =
+        {
+        renderer = {
+          name = "network-renderer-wireguard";
+          repository = "network-renderer-wireguard";
+          schemaVersion = 1;
+        };
+        input = {
+          kind = "provider-contract";
+          path = provenanceInput.path or "provider-contract";
+        };
+        output = {
+          kind = "provider-runtime-module";
+          artifact = outputArtifact;
+        };
+        sources = {
+          sourceClasses = redactedSourceClasses;
+          missingSourceClasses = provenanceMissingSourceClasses;
+        };
+        requested = {
+          scope = requestedScope;
+          target =
+            if builtins.isAttrs requestedTarget then
+              requestedTarget
+            else
+              {
+                renderer = "wireguard";
+                role = "renderer-output";
+              };
+          derivedScope = requestedDerivedScope;
+        };
+        locks = {
+          upstream = provenanceInput.locks or { };
+          renderer = {
+            available = true;
+          };
+        };
+        redaction = {
+          protectedValues = "redacted";
+        };
+      }
+      // (
+        let
+          controlledBaseline = provenanceInput.controlledBaseline or provenanceInput.sourceBaseline or null;
+        in
+          if controlledBaseline != null then
+            { controlledBaseline = controlledBaseline; }
+          else
+            { }
+      );
       capabilities = [
         "provider-runtime"
         "wireguard-profile-import"
@@ -45,12 +153,15 @@
     if missingRequiredCapabilities != [ ] then
       throw "wireguard-provider required target capabilities not declared: ${builtins.concatStringsSep ", " missingRequiredCapabilities}"
     else
-    {
-      rendererClass = "provider";
-      targetRenderer = "wireguard-provider";
-      scope = {
-        providerId = providerContract.id or "wireguard-provider";
-      };
+      {
+        metadata = {
+          provenance = provenanceRecord;
+        };
+        rendererClass = "provider";
+        targetRenderer = "wireguard-provider";
+        scope = {
+          providerId = providerContract.id or "wireguard-provider";
+        };
       capabilities = capabilities;
       artifacts = {
         nixosModules = {

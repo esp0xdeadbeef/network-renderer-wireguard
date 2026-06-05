@@ -489,7 +489,53 @@ let
       ];
     }
   );
+  fs100ProvenanceContract =
+    lib.recursiveUpdate baseContract {
+      id = "fs100-renderer-output-provenance-provider";
+      provenance = {
+        path = "provider-contracts/fs100-wireguard-provider.json";
+        sourceClasses = {
+          userIntent = {
+            path = "examples/fs100/intent.nix";
+            narHash = "sha256-intent";
+          };
+          publicInventory = {
+            path = "examples/fs100/inventory-nixos.nix";
+            narHash = "sha256-public-inventory";
+          };
+          protectedInventory = {
+            ref = "sops://examples/fs100/protected.yaml";
+            secretValue = "PLAINTEXT-PROTECTED-VALUE";
+          };
+          runtimeFacts = {
+            ref = "runtime://provider/public-addresses";
+          };
+          validationContext = {
+            profile = "renderer-construction";
+          };
+        };
+        requested = {
+          scope = {
+            site = "nixos";
+            host = "s-router-nixos";
+          };
+          target = {
+            renderer = "wireguard";
+            role = "renderer-output";
+          };
+        };
+        locks = {
+          "network-control-plane-model" = {
+            rev = "1111222233334444555566667777888899990000";
+            narHash = "sha256-cpm";
+          };
+        };
+        controlledBaseline = "fs100-renderer-output-provenance";
+      };
+    };
   renderResult = flake.libBySystem.${system}.renderer.buildWireGuardProviderRenderResult baseContract;
+  fs100ProvenanceRenderResult =
+    flake.libBySystem.${system}.renderer.buildWireGuardProviderRenderResult fs100ProvenanceContract;
   selfHostedRenderResult =
     flake.libBySystem.${system}.renderer.buildWireGuardProviderRenderResult selfHostedExposureContract;
   commercialPortForwardRenderResult =
@@ -644,6 +690,7 @@ in
     hasProviderRuntimeModule =
       builtins.hasAttr "providerRuntime" renderResultWithRequiredCapabilities.artifacts.nixosModules;
   };
+  fs100RendererOutputProvenance = fs100ProvenanceRenderResult.metadata.provenance;
 
   inherit
     missingDnsModeResult
