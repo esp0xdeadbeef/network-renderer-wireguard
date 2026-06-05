@@ -9,6 +9,7 @@ if [[ "${NETWORK_REPO_SWEEP:-0}" != "1" && "${NETWORK_REPO_DIRECT_TEST_OK:-0}" !
 fi
 
 bash tests/test-provider-runtime-contract.sh
+bash tests/test-fs100-renderer-output-provenance.sh
 bash tests/test-fs470-wireguard-remote-egress-smt.sh
 bash tests/test-s88-code-traceability.sh
 nix flake check --no-write-lock-file
