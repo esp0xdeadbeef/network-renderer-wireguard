@@ -12,10 +12,12 @@
     }:
     let
       lib = nixpkgs.lib;
+
       systems = [
         "x86_64-linux"
         "aarch64-linux"
       ];
+
       forAllSystems = lib.genAttrs systems;
 
       mkSystemLib =
@@ -23,6 +25,7 @@
         let
           providerContractCm = import ./s88/ControlModule/provider-contract.nix { inherit lib; };
           renderResultCm = import ./s88/ControlModule/render-result.nix { };
+
           validateProviderContract =
             providerContract:
             let
@@ -42,6 +45,15 @@
         in
         {
           renderer = rec {
+            hostModule =
+              _rendererInput:
+              { ... }:
+              {
+                # TODO: implement the WireGuard backend NixOS host module.
+                # Temporary no-op so consumers can depend on the standard renderer
+                # contract without patching downstream NixOS host profiles.
+              };
+
             buildWireGuardProviderRenderResult =
               providerRequest:
               let
@@ -50,13 +62,16 @@
                     providerRequest.providerContract
                   else
                     providerRequest;
+
                 validatedProviderContract = validateProviderContract providerContract;
                 validationToken = builtins.seq validatedProviderContract true;
+
                 requiredCapabilities =
                   if builtins.isAttrs providerRequest && builtins.isList (providerRequest.requiredCapabilities or null) then
                     providerRequest.requiredCapabilities
                   else
                     [ ];
+
                 providerRuntimeModule = {
                   imports = [ self.nixosModules.default ];
                   services.network-renderer-wireguard.providerRuntime = {
