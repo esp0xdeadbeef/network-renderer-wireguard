@@ -21,10 +21,17 @@ let
       vpn = "wg0";
     };
     profile = {
+      mode = "profile-import";
       path = "/run/test-provider/wg.conf";
       format = "wireguard";
     };
     dns.mode = "default";
+    firewall = {
+      mode = "dedicated-gateway";
+      allowLanToVpn = true;
+      denyLanToWan = true;
+      denyWanToLan = true;
+    };
     runtime.uuidFile = "/run/network-renderer-wireguard/test-provider.uuid";
     publicIngress = [ ];
     portForwards = [ ];

@@ -56,11 +56,11 @@ in
 
       [ipv4]
       method=${state.wanIPv4Method}
-      route-metric=${state.wanIPv4RouteMetric}
+      ${lib.optionalString (state.wanIPv4RouteMetric != null) "route-metric=${state.wanIPv4RouteMetric}"}
 
       [ipv6]
       method=${state.wanIPv6Method}
-      route-metric=${state.wanIPv6RouteMetric}
+      ${lib.optionalString (state.wanIPv6RouteMetric != null) "route-metric=${state.wanIPv6RouteMetric}"}
     '';
 
   dispatcherService =

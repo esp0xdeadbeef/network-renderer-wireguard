@@ -35,7 +35,6 @@ in
       raEnable = get [ "services" "ra" "enable" ] false;
       lanIPv4 = get [ "lan" "ipv4" "address" ] null;
       lanIPv6 = get [ "lan" "ipv6" "address" ] null;
-      generatedPeer = get [ "profile" "generatedPeer" ] { };
     in
     rec {
       inherit contract get required dhcp4Enable raEnable lanIPv4 lanIPv6;
@@ -52,9 +51,7 @@ in
       lanInterface = required [ "interfaces" "lan" ];
       vpnInterface = required [ "interfaces" "vpn" ];
 
-      profileMode = get [ "profile" "mode" ] (
-        if generatedPeer != { } then "generated-peer" else "profile-import"
-      );
+      profileMode = required [ "profile" "mode" ];
       generatedConfigPath =
         get [ "runtime" "generatedConfigPath" ] "/run/network-renderer-wireguard/generated-${contractId}.conf";
       uuidFile = required [ "runtime" "uuidFile" ];
@@ -73,7 +70,7 @@ in
       ownNetworkStack = get [ "runtime" "ownNetworkStack" ] true;
 
       enableHealthCheck = get [ "services" "healthCheck" "enable" ] true;
-      healthTarget4 = get [ "services" "healthCheck" "target4" ] "1.1.1.1";
+      healthTarget4 = get [ "services" "healthCheck" "target4" ] null;
       healthInterval = get [ "services" "healthCheck" "interval" ] "60s";
 
       lanAddresses = lib.filter (value: value != null) [
@@ -83,8 +80,8 @@ in
 
       wanIPv4Method = get [ "wan" "ipv4" "method" ] "auto";
       wanIPv6Method = get [ "wan" "ipv6" "method" ] "auto";
-      wanIPv4RouteMetric = toString (get [ "wan" "ipv4" "routeMetric" ] 300);
-      wanIPv6RouteMetric = toString (get [ "wan" "ipv6" "routeMetric" ] 300);
+      wanIPv4RouteMetric = let m = get [ "wan" "ipv4" "routeMetric" ] null; in if m == null then null else toString m;
+      wanIPv6RouteMetric = let m = get [ "wan" "ipv6" "routeMetric" ] null; in if m == null then null else toString m;
 
       dhcp4Subnet = if dhcp4Enable then required [ "services" "dhcp4" "subnet" ] else null;
       dhcp4Pool = if dhcp4Enable then required [ "services" "dhcp4" "pool" ] else null;
@@ -95,10 +92,10 @@ in
       raPrefix = if raEnable then required [ "services" "ra" "prefix" ] else null;
       raRdnss = get [ "services" "ra" "rdnss" ] [ ];
 
-      firewallMode = get [ "firewall" "mode" ] "dedicated-gateway";
-      allowLanToVpn = get [ "firewall" "allowLanToVpn" ] true;
-      denyLanToWan = get [ "firewall" "denyLanToWan" ] true;
-      denyWanToLan = get [ "firewall" "denyWanToLan" ] true;
+      firewallMode = get [ "firewall" "mode" ] null;
+      allowLanToVpn = get [ "firewall" "allowLanToVpn" ] null;
+      denyLanToWan = get [ "firewall" "denyLanToWan" ] null;
+      denyWanToLan = get [ "firewall" "denyWanToLan" ] null;
 
       nat44Enable = required [ "nat" "ipv4" "enable" ];
       nat44Sources = get [ "nat" "ipv4" "sourceCidrs" ] [ ];
