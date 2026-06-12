@@ -16,6 +16,48 @@ must be explicit in the README, tests, and owning layer before it is accepted.
 network-forwarding-model -> network-control-plane-model -> network-renderer-wireguard
 ```
 
+## Spec Chain
+
+This renderer materializes WireGuard runtime output from explicit CPM provider contracts.
+All behavior requirements originate from the FS-470 spec chain.
+
+### Owning Chain: Remote Egress over WireGuard
+
+| Layer | ID | Description |
+|-------|----|-------------|
+| URS   | Via FS-470 | Provider overlay transport — explicit policy-routed path |
+| FS    | FS-470 | Remote Egress over WireGuard — explicit policy-routed path with fail-closed |
+| HDS   | FS-470-HDS-010 | WireGuard Remote Egress hardware design — substrate facts (peer ID, tunnel readiness, overlay IPAM authority) |
+| SDS   | FS-470-HDS-010-SDS-010 | WireGuard Remote Egress software design — architecture, failure boundaries, overlay identity + IPAM preservation |
+| SMS   | FS-470-HDS-010-SDS-010-SMS-010 | **Coordinator** — WireGuard renderer module: `wg` binary in nix store, persistent WireGuard interface, service name `s88-provider-interface-wg-egress.service` (SMT: OK) |
+| SMS   | FS-470-HDS-010-SDS-010-SMS-020 | Overlay IPAM binding — WireGuard addresses validate against overlay's IPAM authority |
+| SMS   | FS-470-HDS-010-SDS-010-SMS-030 | Unrelated pool denial — no reuse of management/tenant/client-prefix pools |
+| SMS   | FS-470-HDS-010-SDS-010-SMS-040 | Bootstrap payload separation — DNS/bootstrap facts separate from payload reachability |
+
+### SMT Status (2026-06-12)
+
+- FS-470-HDS-010-SDS-010-SMS-010 (Coordinator): **OK** — All child atoms tested at `network-renderer-wireguard@819faed`
+- SMS-020 through SMS-040: **OK** — Full suite PASS
+- All child SMS rows delegate to coordinator. Coordinator has no independent construction beyond child module contracts.
+
+### Pipeline
+
+```
+network-labs (intent + inventory) → network-compiler → NFM → CPM → network-renderer-wireguard
+```
+
+Required inputs: Explicit CPM provider contracts. Inventory is a required input per SMS-010 — the pipeline must include it.
+
+### SMS-010 Key Requirements
+
+- Container definition MUST include `wg` binary in nix store closure
+- Persistent WireGuard interface required (no bash wrapper that exits)
+- Service name: `s88-provider-interface-wg-egress.service`
+
+### Owning Repository
+
+Construction tests: `network-renderer-wireguard/tests/`
+
 ## Contract
 
 - The forwarding model and CPM/provider contract are the source of truth.
