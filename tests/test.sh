@@ -12,4 +12,5 @@ bash tests/test-provider-runtime-contract.sh
 bash tests/test-fs100-renderer-output-provenance.sh
 bash tests/test-fs470-wireguard-remote-egress-smt.sh
 bash tests/test-s88-code-traceability.sh
+bash tests/test-fs470-boundary-scan.sh
 nix flake check --no-write-lock-file
