@@ -69,6 +69,12 @@ let
       uuidFile = "/run/network-renderer-wireguard/fs470.uuid";
     };
     dns.mode = "default";
+    firewall = {
+      mode = "dedicated-gateway";
+      allowLanToVpn = true;
+      denyLanToWan = true;
+      denyWanToLan = true;
+    };
     publicIngress = [ ];
     portForwards = [ ];
     lan = {

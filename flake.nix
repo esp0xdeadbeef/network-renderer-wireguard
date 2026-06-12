@@ -141,8 +141,18 @@
                         inventoryOverlays;
                       wgData = invOverlay.wgData;
                       peers = wgData.peers or [ ];
-                      wgIface = wgData.interface or "wg-egress";
-                      privateKeyFile = wgData.privateKeyFile or "/run/secrets/${wgIface}-private";
+                      wgIface =
+                        if wgData ? interface && builtins.isString wgData.interface && wgData.interface != "" then
+                          wgData.interface
+                        else
+                          throw "network-renderer-wireguard: inventory overlay ${node.overlayName} wireguard data requires explicit interface name";
+                      privateKeyFile =
+                        if wgData ? privateKeyFile
+                           && builtins.isString wgData.privateKeyFile
+                           && wgData.privateKeyFile != "" then
+                          wgData.privateKeyFile
+                        else
+                          throw "network-renderer-wireguard: inventory overlay ${node.overlayName} wireguard data requires explicit privateKeyFile";
                       listenPort = wgData.listenPort or null;
                       netdevName = "40-${wgIface}";
                     in
