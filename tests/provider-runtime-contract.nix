@@ -56,6 +56,7 @@ let
         pool = "10.66.0.100 - 10.66.0.200";
         gateway = "10.66.0.1";
         dns = [ "10.66.0.1" ];
+        leaseFile = "/var/lib/kea/dhcp4.leases";
       };
       ra = {
         enable = true;
@@ -474,6 +475,7 @@ let
       id = "public-ingress-routed-gua-dns-nat66-hostile";
       profile.path = "/run/public-ingress-routed-gua-dns-nat66-hostile.conf";
       dns.mode = "none";
+      runtime.ownNetworkStack = true;
       nat = {
         ipv4 = {
           enable = false;
