@@ -103,13 +103,13 @@ CPM model internally — no separate parameter, no path-based API:
 
 ```nix
 inputs.network-renderer-wireguard.libBySystem.${system}.renderer.hostModule {
-  controlPlaneModel = ...;  # CPM control_plane_model output (REQUIRED)
+  controlPlane = ...;  # CPM control_plane_model output (REQUIRED)
   hostName = ...;           # host name (REQUIRED)
-  # wgInventory extracted from controlPlaneModel.wgInventory internally
+  # wgInventory extracted from controlPlane.wgInventory internally
 }
 ```
 
-**CPM_GAP**: `controlPlaneModel` does not yet emit `wgInventory`. When absent,
+**CPM_GAP**: `controlPlane` does not yet emit `wgInventory`. When absent,
 no wireguard containers are created (graceful no-op). This gap must be closed
 in `network-control-plane-model` before live WireGuard overlays can render.
 
