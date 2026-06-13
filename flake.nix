@@ -29,8 +29,6 @@
         let
           providerContractCm = import ./s88/ControlModule/provider-contract.nix { inherit lib; };
           renderResultCm = import ./s88/ControlModule/render-result.nix { };
-          cpmLib = network-control-plane-model.libBySystem.${system};
-
           validateProviderContract =
             providerContract:
             let
@@ -48,63 +46,9 @@
             else
               providerContract;
 
-          # Pipeline orchestration helper: compiles CPM from raw intent/inventory
-          # paths and extracts WG-specific overlay data. This is NOT rendering
-          # logic — it is data preparation that calls CPM's library.
-          # hostModule consumes only the pre-compiled output (controlPlaneModel
-          # + wgInventory), satisfying SMS-021 CPM-only consumption.
-          prepareWireGuardProviderHostModuleInput =
-            {
-              intentPath,
-              inventoryPath,
-            }:
-            let
-              controlPlane = cpmLib.compileAndBuildFromPaths {
-                inputPath = intentPath;
-                inventoryPath = inventoryPath;
-              };
-              inventory = cpmLib.readInput inventoryPath;
-              inventoryData = inventory.controlPlane or { };
-              inventorySites = inventoryData.sites or { };
-              inventoryOverlays = lib.concatLists (
-                lib.mapAttrsToList
-                  (_enterprise: enterpriseSites:
-                    lib.concatLists (
-                      lib.mapAttrsToList
-                        (_site: siteData:
-                          let
-                            overlays = siteData.overlays or { };
-                          in
-                          lib.mapAttrsToList
-                            (_overlayName: overlayData:
-                              {
-                                overlayName = _overlayName;
-                                wgData = overlayData.wireguard or overlayData.wg or { };
-                                provider = overlayData.provider or null;
-                              }
-                            )
-                            overlays
-                        )
-                        enterpriseSites
-                    )
-                  )
-                  inventorySites
-              );
-              wgInventory = builtins.listToAttrs (
-                map (o: {
-                  name = o.overlayName;
-                  value = o.wgData;
-                }) inventoryOverlays
-              );
-            in
-            {
-              controlPlaneModel = controlPlane.control_plane_model;
-              inherit wgInventory;
-            };
-
-          # Build per-overlay WG node configs from CPM model + WG inventory data.
-          # Accepts only pre-compiled CPM output (controlPlaneModel) and
-          # pre-extracted WG data (wgInventory) — satisfies SMS-021.
+          # Build per-overlay WG node configs from CPM model.
+          # Accepts pre-compiled CPM output (controlPlaneModel) and
+          # WG overlay data (wgInventory, extracted from CPM model) — satisfies SMS-021.
           buildWireGuardNodeConfigs =
             {
               controlPlaneModel,
@@ -292,18 +236,20 @@
         in
         {
           renderer = rec {
-            # FS-470-HDS-010-SDS-010-SMS-021: Accepts only CPM output
-            # (controlPlaneModel + wgInventory), not raw intent/inventory paths.
-            inherit prepareWireGuardProviderHostModuleInput;
+            # FS-470-HDS-010-SDS-010-SMS-021: Accepts only CPM output (controlPlaneModel).
+            # wgInventory is extracted from controlPlaneModel internally — no separate
+            # parameter, no path-based API, no inventory tree walking.
+            # CPM_GAP: controlPlaneModel does not yet emit wgInventory.
+            # When absent, no wireguard containers are created (graceful no-op).
 
             hostModule =
               rendererInput:
               { config, lib, pkgs, ... }:
               let
+                wgInventory = rendererInput.controlPlaneModel.wgInventory or { };
                 nodeConfigs = buildWireGuardNodeConfigs {
                   controlPlaneModel = rendererInput.controlPlaneModel;
-                  wgInventory = rendererInput.wgInventory or { };
-                  inherit pkgs lib;
+                  inherit wgInventory pkgs lib;
                 };
 
                 grouped = lib.foldl
