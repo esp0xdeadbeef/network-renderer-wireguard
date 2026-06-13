@@ -94,32 +94,24 @@ The flake exports:
 - `nixosModules.wireguard-provider-runtime`
 - `libBySystem.<system>.renderer.buildWireGuardProviderRenderResult`
 - `libBySystem.<system>.renderer.buildWireGuardProviderRuntimeModule`
-- `libBySystem.<system>.renderer.hostModule` — CPM-only NixOS module generator
-- `libBySystem.<system>.renderer.prepareWireGuardProviderHostModuleInput` — compile CPM + extract WG data
+- `libBySystem.<system>.renderer.hostModule` — CPM-only NixOS module generator (wgInventory extracted from CPM model internally)
 
 ### hostModule (FS-470-HDS-010-SDS-010-SMS-021)
 
-Accepts ONLY pre-compiled CPM output — does not accept raw intent/inventory paths:
+Accepts ONLY pre-compiled CPM output. `wgInventory` is extracted from the
+CPM model internally — no separate parameter, no path-based API:
 
 ```nix
 inputs.network-renderer-wireguard.libBySystem.${system}.renderer.hostModule {
-  controlPlaneModel = ...;  # CPM control_plane_model output
-  wgInventory = ...;        # attrset keyed by overlay name: { interface, privateKeyFile, listenPort, peers }
+  controlPlaneModel = ...;  # CPM control_plane_model output (REQUIRED)
+  hostName = ...;           # host name (REQUIRED)
+  # wgInventory extracted from controlPlaneModel.wgInventory internally
 }
 ```
 
-### prepareWireGuardProviderHostModuleInput
-
-Pipeline orchestration helper: compiles CPM from raw intent/inventory and extracts
-WG-specific overlay data. Returns the structure that `hostModule` accepts:
-
-```nix
-inputs.network-renderer-wireguard.libBySystem.${system}.renderer.prepareWireGuardProviderHostModuleInput {
-  intentPath = ./path/to/intent.nix;
-  inventoryPath = ./path/to/inventory.nix;
-}
-# Returns { controlPlaneModel = ...; wgInventory = ...; }
-```
+**CPM_GAP**: `controlPlaneModel` does not yet emit `wgInventory`. When absent,
+no wireguard containers are created (graceful no-op). This gap must be closed
+in `network-control-plane-model` before live WireGuard overlays can render.
 
 ### buildWireGuardProviderRenderResult / buildWireGuardProviderRuntimeModule
 
