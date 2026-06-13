@@ -47,17 +47,17 @@
               providerContract;
 
           # Build per-overlay WG node configs from CPM model.
-          # Accepts pre-compiled CPM output (controlPlaneModel) and
+          # Accepts pre-compiled CPM output (controlPlane) and
           # WG overlay data (wgInventory, extracted from CPM model) — satisfies SMS-021.
           buildWireGuardNodeConfigs =
             {
-              controlPlaneModel,
+              controlPlane,
               wgInventory,
               pkgs,
               lib,
             }:
             let
-              cpmData = controlPlaneModel.data or { };
+              cpmData = controlPlane.data or { };
               wgNodes = lib.concatLists (
                 lib.mapAttrsToList
                   (_enterprise: enterpriseData:
@@ -236,19 +236,19 @@
         in
         {
           renderer = rec {
-            # FS-470-HDS-010-SDS-010-SMS-021: Accepts only CPM output (controlPlaneModel).
-            # wgInventory is extracted from controlPlaneModel internally — no separate
+            # FS-470-HDS-010-SDS-010-SMS-021: Accepts only CPM output (controlPlane).
+            # wgInventory is extracted from controlPlane internally — no separate
             # parameter, no path-based API, no inventory tree walking.
-            # CPM_GAP: controlPlaneModel does not yet emit wgInventory.
+            # CPM_GAP: controlPlane does not yet emit wgInventory.
             # When absent, no wireguard containers are created (graceful no-op).
 
             hostModule =
               rendererInput:
               { config, lib, pkgs, ... }:
               let
-                wgInventory = rendererInput.controlPlaneModel.wgInventory or { };
+                wgInventory = rendererInput.controlPlane.wgInventory or { };
                 nodeConfigs = buildWireGuardNodeConfigs {
-                  controlPlaneModel = rendererInput.controlPlaneModel;
+                  controlPlane = rendererInput.controlPlane;
                   inherit wgInventory pkgs lib;
                 };
 
