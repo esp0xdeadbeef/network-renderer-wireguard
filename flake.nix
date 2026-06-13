@@ -131,6 +131,21 @@
                     inventorySites
                 );
 
+                # Filter wgNodes to only those with wireguard data in inventory.
+                # Overlays without wireguard data (e.g., nebula east-west) are
+                # present in CPM wgNodes but have empty wgData in inventory.
+                wgNodesWithWgData = lib.filter
+                  (node:
+                    let
+                      invOverlay = lib.findFirst
+                        (o: o.overlayName == node.overlayName)
+                        null
+                        inventoryOverlays;
+                    in
+                    invOverlay != null && invOverlay.wgData != { }
+                  )
+                  wgNodes;
+
                 # Combine CPM nodes with inventory WG data
                 nodeConfigs = map
                   (node:
@@ -245,7 +260,7 @@
                       };
                     }
                   )
-                  wgNodes;
+                  wgNodesWithWgData;
 
                 grouped = lib.foldl
                   (acc: { container, config, ... }:
