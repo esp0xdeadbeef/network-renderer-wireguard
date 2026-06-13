@@ -225,7 +225,7 @@
                           };
                         };
 
-                        systemd.services.s88-provider-interface-wg-egress = {
+                        systemd.services."s88-provider-interface-${wgIface}-egress" = {
                           description = "S88 WireGuard Provider Egress Interface";
                           wantedBy = [ "multi-user.target" ];
                           after = [ "network.target" "systemd-networkd.service" ];
@@ -235,7 +235,7 @@
                             Type = "oneshot";
                             RemainAfterExit = true;
                             ExecStart = pkgs.writeShellScript
-                              "s88-provider-interface-wg-egress-start" ''
+                              "s88-provider-interface-${wgIface}-egress-start" ''
                                 set -euo pipefail
                                 IFACE=${lib.escapeShellArg wgIface}
                                 for i in $(seq 1 30); do
@@ -250,7 +250,7 @@
                                 exit 1
                               '';
                             ExecStop = pkgs.writeShellScript
-                              "s88-provider-interface-wg-egress-stop" ''
+                              "s88-provider-interface-${wgIface}-egress-stop" ''
                                 set -euo pipefail
                                 IFACE=${lib.escapeShellArg wgIface}
                                 ip link set "$IFACE" down 2>/dev/null || true
