@@ -46,7 +46,7 @@ All behavior requirements originate from the FS-470 spec chain.
 network-labs (intent + inventory) → network-compiler → NFM → CPM → network-renderer-wireguard
 ```
 
-Required inputs: Explicit CPM provider contracts. Inventory is a required input per SMS-010 — the pipeline must include it.
+Required inputs: Explicit CPM provider-neutral output (overlay runtime data, provider contracts). Per FS-983, the renderer consumes data through CPM output — it does not parse raw `intent.nix`, `inventory.nix`, or provider profile files for network meaning.
 
 ### SMS-010 Key Requirements
 
@@ -94,6 +94,34 @@ The flake exports:
 - `nixosModules.wireguard-provider-runtime`
 - `libBySystem.<system>.renderer.buildWireGuardProviderRenderResult`
 - `libBySystem.<system>.renderer.buildWireGuardProviderRuntimeModule`
+- `libBySystem.<system>.renderer.hostModule` — CPM-only NixOS module generator
+- `libBySystem.<system>.renderer.prepareWireGuardProviderHostModuleInput` — compile CPM + extract WG data
+
+### hostModule (FS-470-HDS-010-SDS-010-SMS-021)
+
+Accepts ONLY pre-compiled CPM output — does not accept raw intent/inventory paths:
+
+```nix
+inputs.network-renderer-wireguard.libBySystem.${system}.renderer.hostModule {
+  controlPlaneModel = ...;  # CPM control_plane_model output
+  wgInventory = ...;        # attrset keyed by overlay name: { interface, privateKeyFile, listenPort, peers }
+}
+```
+
+### prepareWireGuardProviderHostModuleInput
+
+Pipeline orchestration helper: compiles CPM from raw intent/inventory and extracts
+WG-specific overlay data. Returns the structure that `hostModule` accepts:
+
+```nix
+inputs.network-renderer-wireguard.libBySystem.${system}.renderer.prepareWireGuardProviderHostModuleInput {
+  intentPath = ./path/to/intent.nix;
+  inventoryPath = ./path/to/inventory.nix;
+}
+# Returns { controlPlaneModel = ...; wgInventory = ...; }
+```
+
+### buildWireGuardProviderRenderResult / buildWireGuardProviderRuntimeModule
 
 Example library use:
 
