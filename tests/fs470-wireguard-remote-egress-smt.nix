@@ -98,6 +98,7 @@ let
         pool = "10.147.0.100 - 10.147.0.180";
         gateway = "10.147.0.1";
         dns = [ "10.147.0.1" ];
+        leaseFile = "/var/lib/kea/dhcp4.leases";
       };
       ra = {
         enable = true;

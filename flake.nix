@@ -194,8 +194,18 @@
                           wireguardPeers = map
                             (peer: {
                               wireguardPeerConfig = {
-                                PublicKey = peer.publicKey or "";
-                                Endpoint = peer.endpoint or "";
+                                PublicKey = if peer ? publicKey
+                                  && builtins.isString peer.publicKey
+                                  && peer.publicKey != "" then
+                                  peer.publicKey
+                                else
+                                  throw "FS-310-HDS-010-SDS-010-SMS-110: WireGuard peer requires publicKey from provider contract";
+                                Endpoint = if peer ? endpoint
+                                  && builtins.isString peer.endpoint
+                                  && peer.endpoint != "" then
+                                  peer.endpoint
+                                else
+                                  throw "FS-310-HDS-010-SDS-010-SMS-110: WireGuard peer requires endpoint from provider contract";
                                 AllowedIPs = peer.allowedIPs or [ ];
                               }
                               // lib.optionalAttrs (peer ? presharedKeyFile

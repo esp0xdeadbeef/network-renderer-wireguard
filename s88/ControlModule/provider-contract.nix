@@ -4,9 +4,9 @@ let
   pathName = path: lib.concatStringsSep "." path;
   isNonEmptyString = value: builtins.isString value && value != "";
   peerField = peer: name: if builtins.hasAttr name peer then peer.${name} else null;
-  peerString = peer: name: if isNonEmptyString (peerField peer name) then peerField peer name else "";
+  peerString = peer: name: if isNonEmptyString (peerField peer name) then peerField peer name else null;
   peerList = peer: name: if builtins.isList (peerField peer name) then peerField peer name else [ ];
-  endpointAddress = endpoint: endpoint.address or (endpoint.host or (endpoint.name or ""));
+  endpointAddress = endpoint: endpoint.address or (endpoint.host or (endpoint.name or null));
   routeField = route: name: if builtins.hasAttr name route then route.${name} else null;
   exposureField = exposure: name: if builtins.hasAttr name exposure then exposure.${name} else null;
   isValidProtocol = protocol: builtins.elem protocol [
@@ -39,7 +39,7 @@ in
     rec {
       inherit contract get required dhcp4Enable raEnable lanIPv4 lanIPv6;
 
-      contractId = get [ "id" ] "wireguard-provider";
+      contractId = get [ "id" ] null;
       providerClass = required [ "provider" "class" ];
       providerMode = required [ "provider" "mode" ];
       publicIngressAuthority = get [ "provider" "publicIngressAuthority" ] false;
@@ -53,7 +53,7 @@ in
 
       profileMode = required [ "profile" "mode" ];
       generatedConfigPath =
-        get [ "runtime" "generatedConfigPath" ] "/run/network-renderer-wireguard/generated-${contractId}.conf";
+        get [ "runtime" "generatedConfigPath" ] null;
       uuidFile = required [ "runtime" "uuidFile" ];
 
       profilePath =
@@ -67,19 +67,19 @@ in
       generatedMtu = get [ "profile" "generatedPeer" "mtu" ] null;
       generatedPeers = get [ "profile" "generatedPeer" "peers" ] [ ];
 
-      ownNetworkStack = get [ "runtime" "ownNetworkStack" ] true;
+      ownNetworkStack = get [ "runtime" "ownNetworkStack" ] false;
 
-      enableHealthCheck = get [ "services" "healthCheck" "enable" ] true;
+      enableHealthCheck = get [ "services" "healthCheck" "enable" ] false;
       healthTarget4 = get [ "services" "healthCheck" "target4" ] null;
-      healthInterval = get [ "services" "healthCheck" "interval" ] "60s";
+      healthInterval = get [ "services" "healthCheck" "interval" ] null;
 
       lanAddresses = lib.filter (value: value != null) [
         lanIPv4
         lanIPv6
       ];
 
-      wanIPv4Method = get [ "wan" "ipv4" "method" ] "auto";
-      wanIPv6Method = get [ "wan" "ipv6" "method" ] "auto";
+      wanIPv4Method = get [ "wan" "ipv4" "method" ] null;
+      wanIPv6Method = get [ "wan" "ipv6" "method" ] null;
       wanIPv4RouteMetric = let m = get [ "wan" "ipv4" "routeMetric" ] null; in if m == null then null else toString m;
       wanIPv6RouteMetric = let m = get [ "wan" "ipv6" "routeMetric" ] null; in if m == null then null else toString m;
 
@@ -87,7 +87,7 @@ in
       dhcp4Pool = if dhcp4Enable then required [ "services" "dhcp4" "pool" ] else null;
       dhcp4Gateway = if dhcp4Enable then required [ "services" "dhcp4" "gateway" ] else null;
       dhcp4Dns = get [ "services" "dhcp4" "dns" ] [ ];
-      dhcp4LeaseFile = get [ "services" "dhcp4" "leaseFile" ] "/var/lib/kea/dhcp4.leases";
+      dhcp4LeaseFile = get [ "services" "dhcp4" "leaseFile" ] null;
 
       raPrefix = if raEnable then required [ "services" "ra" "prefix" ] else null;
       raRdnss = get [ "services" "ra" "rdnss" ] [ ];
@@ -132,9 +132,9 @@ in
 
       normalizedPublicIngress = map (ingress: {
         id = ingress.id or contractId;
-        protocol = ingress.protocol or "";
+        protocol = ingress.protocol or null;
         listenPort = exposureField ingress "listenPort";
-        targetAddress = ingress.targetAddress or "";
+        targetAddress = ingress.targetAddress or null;
         targetPort = exposureField ingress "targetPort";
         ingressInterface = ingress.ingressInterface or vpnInterface;
         targetInterface = ingress.targetInterface or lanInterface;
@@ -142,9 +142,9 @@ in
 
       normalizedPortForwards = map (forward: {
         id = forward.id or contractId;
-        protocol = forward.protocol or "";
+        protocol = forward.protocol or null;
         listenPort = exposureField forward "listenPort";
-        targetAddress = forward.targetAddress or "";
+        targetAddress = forward.targetAddress or null;
         targetPort = exposureField forward "targetPort";
         ingressInterface = forward.ingressInterface or wanInterface;
         targetInterface = forward.targetInterface or lanInterface;
@@ -275,6 +275,10 @@ in
         message = "network-renderer-wireguard DHCPv4 requires services.dhcp4.dns from the provider contract";
       }
       {
+        assertion = (!state.dhcp4Enable) || state.dhcp4LeaseFile != null;
+        message = "network-renderer-wireguard DHCPv4 requires services.dhcp4.leaseFile from the provider contract";
+      }
+      {
         assertion = (!state.raEnable) || state.lanIPv6 != null;
         message = "network-renderer-wireguard RA requires lan.ipv6.address";
       }
@@ -399,6 +403,10 @@ in
             && isNonEmptyString forward.targetInterface
           ) state.normalizedPortForwards;
         message = "network-renderer-wireguard port forwards require protocol, listenPort, targetAddress, targetPort, ingressInterface, and targetInterface";
+      }
+      {
+        assertion = (!state.enableHealthCheck) || state.healthInterval != null;
+        message = "network-renderer-wireguard health check requires services.healthCheck.interval when enabled";
       }
     ];
 }

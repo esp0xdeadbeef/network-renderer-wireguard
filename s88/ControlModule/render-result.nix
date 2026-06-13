@@ -75,7 +75,7 @@
         };
         input = {
           kind = "provider-contract";
-          path = provenanceInput.path or "provider-contract";
+          path = provenanceInput.path or null;
         };
         output = {
           kind = "provider-runtime-module";
@@ -160,7 +160,7 @@
         rendererClass = "provider";
         targetRenderer = "wireguard-provider";
         scope = {
-          providerId = providerContract.id or "wireguard-provider";
+          providerId = providerContract.id or null;
         };
       capabilities = capabilities;
       artifacts = {
