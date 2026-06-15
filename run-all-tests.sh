@@ -2,6 +2,7 @@
 # GAMP-ID: RTM-RUNNER-WG-001
 # GAMP-SCOPE: test runner — auto-discovers all tests, no hardcoded list
 set -euo pipefail
+exec > >(tee "/tmp/network-renderer-wireguard-tests.out")
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="${REPO_ROOT}/tests"
@@ -119,6 +120,7 @@ done
 SUITE_END_MS="$(date +%s%3N)"
 printf 'PASS %sms tests (%s total, %s failed)\n' \
   "$((SUITE_END_MS - SUITE_START_MS))" "${#TESTS[@]}" "${FAILED}"
+printf 'PASS: %s, FAIL: %s, TOTAL: %s\n' "$(( ${#TESTS[@]} - FAILED ))" "${FAILED}" "${#TESTS[@]}" >&2
 
 if [[ "${FAILED}" -ne 0 ]]; then
   exit 1
