@@ -19,4 +19,7 @@ bash tests/FS-470-HDS-010-SDS-010-SMS-050.sh
 bash tests/FS-470-HDS-010-SDS-010-SMS-060.sh
 bash tests/FS-470-HDS-010-SDS-010-SMS-070.sh
 bash tests/FS-470-HDS-010-SDS-010-SMS-080.sh
+bash tests/FS-470-HDS-010-SDS-010-SMS-010.sh
+bash tests/FS-470-HDS-010-SDS-010-SMS-020.sh
+bash tests/FS-470-HDS-010-SDS-010-SMS-040.sh
 nix flake check --no-write-lock-file
