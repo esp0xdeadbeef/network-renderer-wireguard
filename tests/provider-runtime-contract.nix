@@ -1,3 +1,6 @@
+# FS-470-HDS-010-SDS-010-SMS-041 and FS-310-HDS-020-SDS-010-SMS-040:
+# provider runtime test fixture binds eth0 as an explicit ingress/WAN interface
+# fact and verifies the WireGuard renderer contract around it.
 { repoRoot ? toString ./..
 , system ? builtins.currentSystem
 }:
