@@ -152,9 +152,8 @@ let
 in
 {
   providerRuntime = {
+    inherit (withRuntime.container) autoStart;
     extraFlags = withRuntime.container.extraFlags;
-    containerUnitAfter = withRuntime.hostOutput.systemd.services."container@wireguard-remote-egress".after;
-    containerUnitRequires = withRuntime.hostOutput.systemd.services."container@wireguard-remote-egress".requires;
     providerRuntimeEnabled =
       withRuntime.config.services.network-renderer-wireguard.providerRuntime.enable;
     providerContractId =
@@ -170,6 +169,7 @@ in
   };
 
   withoutProviderRuntime = {
+    inherit (withoutRuntime.container) autoStart;
     hasDispatcher =
       withoutRuntime.config.systemd.services ? wireguard-provider-dispatcher;
     hasProviderRuntimeOption =
