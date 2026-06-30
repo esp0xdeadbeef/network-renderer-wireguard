@@ -29,6 +29,8 @@ for phrase in \
   '"dispatcherDescription":"Bring up provider tunnel wg-re-egress0 from model/provider contract"' \
   '"--bind-ro=/run/secrets/wireguard-mini-provider-private-key:/run/secrets/wireguard-mini-provider-private-key"' \
   '"hasNetdevService":false' \
+  '"lanNetdevKind":"dummy"' \
+  '"systemd-networkd.service"' \
   'iifname \"edge-lan0\" oifname \"wg-re-egress0\" accept comment \"wg-provider-lan-to-vpn fs470-remote-egress\"' \
   'iifname \"edge-lan0\" oifname \"uplink0\" drop comment \"wg-provider-deny-lan-to-wan fs470-remote-egress\"' \
   'ip saddr 10.147.0.0/24 oifname \"wg-re-egress0\" masquerade comment \"wg-provider-nat44 fs470-remote-egress\"' \

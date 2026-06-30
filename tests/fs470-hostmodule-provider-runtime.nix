@@ -162,6 +162,10 @@ in
       withRuntime.config.systemd.services.wireguard-provider-dispatcher.description;
     hasNetdevService =
       withRuntime.config.systemd.services ? "s88-provider-interface-wg-re-egress0-egress";
+    lanNetdevKind =
+      withRuntime.config.systemd.network.netdevs."10-edge-lan0".netdevConfig.Kind;
+    keaAfter = withRuntime.config.systemd.services.kea-dhcp4.after;
+    radvdAfter = withRuntime.config.systemd.services.radvd.after;
     nftables = withRuntime.config.networking.nftables.ruleset;
     dhcp4Config =
       builtins.fromJSON withRuntime.config.environment.etc."kea/kea-dhcp4.conf".text;

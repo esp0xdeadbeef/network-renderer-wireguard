@@ -135,6 +135,10 @@ nftables, and health probes (`CAP_NET_ADMIN`, `CAP_NET_RAW`). Secret file paths
 under `/run/secrets/` are passed through as exact read-only nspawn binds.
 Secret creation remains the host/lab SOPS responsibility.
 
+When a provider contract sets `runtime.ownNetworkStack = true`, the runtime
+module creates the explicit contract LAN interface as a dummy netdev so DHCP
+and RA services bind to a real interface inside the private namespace.
+
 ### buildWireGuardProviderRenderResult / buildWireGuardProviderRuntimeModule
 
 Example library use:
