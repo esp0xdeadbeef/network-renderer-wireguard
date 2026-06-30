@@ -337,29 +337,16 @@
                   paths:
                   map (path: "--bind-ro=${path}:${path}") paths;
 
-                secretContainerNames =
-                  builtins.filter
-                    (containerName: (groupedSecretPaths.${containerName} or [ ]) != [ ])
-                    (builtins.attrNames groupedConfigs);
               in
               lib.mkIf (nodeConfigs != [ ]) {
                 containers = lib.mapAttrs
                   (containerName: cfgs: {
+                    autoStart = true;
                     config.imports = cfgs;
                   } // lib.optionalAttrs ((groupedSecretPaths.${containerName} or [ ]) != [ ]) {
                     extraFlags = secretNspawnBindFlags groupedSecretPaths.${containerName};
                   })
                   groupedConfigs;
-
-                systemd.services = builtins.listToAttrs (map
-                  (containerName: {
-                    name = "container@${containerName}";
-                    value = {
-                      after = [ "sops-nix.service" ];
-                      requires = [ "sops-nix.service" ];
-                    };
-                  })
-                  secretContainerNames);
               };
 
             buildWireGuardProviderRenderResult =
