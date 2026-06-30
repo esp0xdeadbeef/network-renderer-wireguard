@@ -33,6 +33,7 @@ let
     wg-mini = {
       interface = "wg-mini";
       privateKeyFile = "/run/secrets/wireguard-mini-provider-private-key";
+      listenPort = 51820;
       peers = [
         {
           publicKey = "uK6fX6Hg5MR6pQOSRPFKCFH5hvQ5R8ymMjZtUsua3Qg=";
@@ -47,6 +48,7 @@ let
     wg-mini = {
       interface = "wg-mini";
       privateKeyFile = "/etc/wireguard/wg-mini.key";
+      listenPort = 51820;
       peers = [
         {
           publicKey = "uK6fX6Hg5MR6pQOSRPFKCFH5hvQ5R8ymMjZtUsua3Qg=";

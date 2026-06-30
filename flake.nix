@@ -29,6 +29,8 @@
         let
           sms041TraceId = "FS-470-HDS-010-SDS-010-SMS-041";
           sms041Diagnostic = message: "${sms041TraceId}: ${message}";
+          sms022TraceId = "FS-470-HDS-010-SDS-010-SMS-022";
+          sms022Diagnostic = message: "${sms022TraceId}: ${message}";
           providerContractCm = import ./s88/ControlModule/provider-contract.nix { inherit lib; };
           renderResultCm = import ./s88/ControlModule/render-result.nix { };
           validateProviderContract =
@@ -124,20 +126,28 @@
                 (node:
                   let
                     wgData = wgInventory.${node.overlayName} or { };
-                    peers = wgData.peers or [ ];
+                    peers =
+                      if wgData ? peers && builtins.isList wgData.peers && wgData.peers != [ ] then
+                        wgData.peers
+                      else
+                        throw (sms022Diagnostic "WireGuard peers required by CPM-preserved wgInventory for inventory overlay ${node.overlayName}");
                     wgIface =
                       if wgData ? interface && builtins.isString wgData.interface && wgData.interface != "" then
                         wgData.interface
                       else
-                        throw (sms041Diagnostic "WireGuard interface name required by CPM provider contract, cannot default to \"wg-egress\" for inventory overlay ${node.overlayName}");
+                        throw (sms022Diagnostic "WireGuard interface name required by CPM-preserved wgInventory, cannot default to \"wg-egress\" for inventory overlay ${node.overlayName}");
                     privateKeyFile =
                       if wgData ? privateKeyFile
                          && builtins.isString wgData.privateKeyFile
                          && wgData.privateKeyFile != "" then
                         wgData.privateKeyFile
                       else
-                        throw (sms041Diagnostic "WireGuard private key path required by CPM provider contract for inventory overlay ${node.overlayName}, cannot construct a default private key path");
-                    listenPort = wgData.listenPort or null;
+                        throw (sms022Diagnostic "WireGuard private key path required by CPM-preserved wgInventory for inventory overlay ${node.overlayName}, cannot construct a default private key path");
+                    listenPort =
+                      if wgData ? listenPort && builtins.isInt wgData.listenPort then
+                        wgData.listenPort
+                      else
+                        throw (sms022Diagnostic "WireGuard listenPort required by CPM-preserved wgInventory for inventory overlay ${node.overlayName}, cannot default to 51820");
                     netdevName = "40-${wgIface}";
                     secretPaths = lib.unique (
                       builtins.filter (path: path != null) (
@@ -175,14 +185,18 @@
                                 && peer.publicKey != "" then
                                 peer.publicKey
                               else
-                                throw "FS-310-HDS-010-SDS-010-SMS-110: WireGuard peer requires publicKey from provider contract";
+                                throw (sms022Diagnostic "WireGuard peer requires publicKey from CPM-preserved wgInventory for inventory overlay ${node.overlayName}");
                               Endpoint = if peer ? endpoint
                                 && builtins.isString peer.endpoint
                                 && peer.endpoint != "" then
                                 peer.endpoint
                               else
-                                throw "FS-310-HDS-010-SDS-010-SMS-110: WireGuard peer requires endpoint from provider contract";
-                              AllowedIPs = peer.allowedIPs or [ ];
+                                throw (sms022Diagnostic "WireGuard peer requires endpoint from CPM-preserved wgInventory for inventory overlay ${node.overlayName}");
+                              AllowedIPs =
+                                if peer ? allowedIPs && builtins.isList peer.allowedIPs && peer.allowedIPs != [ ] then
+                                  peer.allowedIPs
+                                else
+                                  throw (sms022Diagnostic "WireGuard peer requires allowedIPs from CPM-preserved wgInventory for inventory overlay ${node.overlayName}");
                             }
                             // lib.optionalAttrs (peer ? presharedKeyFile
                                                  && builtins.isString peer.presharedKeyFile
