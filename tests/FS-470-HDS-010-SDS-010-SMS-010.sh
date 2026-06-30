@@ -177,7 +177,7 @@ module_json="$(nix eval --impure --no-warn-dirty --json --expr "
       interfaces = {
         wan = \"uplink0\";
         lan = \"edge-lan0\";
-        vpn = \"wg-sms010-routes\";
+        vpn = \"wg-sms010-rt\";
       };
       profile = {
         mode = \"generated-peer\";

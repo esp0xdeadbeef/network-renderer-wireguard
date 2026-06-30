@@ -149,7 +149,10 @@
                         throw (sms022Diagnostic "WireGuard peers required by CPM-preserved wgInventory for inventory overlay ${node.overlayName}");
                     wgIface =
                       if wgData ? interface && builtins.isString wgData.interface && wgData.interface != "" then
-                        wgData.interface
+                        if builtins.stringLength wgData.interface <= 15 then
+                          wgData.interface
+                        else
+                          throw (sms022Diagnostic "WireGuard interface name from CPM-preserved wgInventory must be <= 15 characters for Linux, got ${wgData.interface}")
                       else
                         throw (sms022Diagnostic "WireGuard interface name required by CPM-preserved wgInventory, cannot default to \"wg-egress\" for inventory overlay ${node.overlayName}");
                     privateKeyFile =
@@ -299,9 +302,15 @@
               rendererInput:
               { config, lib, pkgs, ... }:
               let
-                wgInventory = rendererInput.controlPlane.wgInventory or { };
+                controlPlaneBundle = rendererInput.controlPlane or (throw "${sms022TraceId}: WireGuard hostModule requires pre-compiled CPM output in controlPlane");
+                controlPlaneModel =
+                  if builtins.isAttrs (controlPlaneBundle.control_plane_model or null) then
+                    controlPlaneBundle.control_plane_model
+                  else
+                    throw "${sms022TraceId}: WireGuard hostModule requires CPM bundle controlPlane.control_plane_model";
+                wgInventory = controlPlaneModel.wgInventory or { };
                 nodeConfigs = buildWireGuardNodeConfigs {
-                  controlPlane = rendererInput.controlPlane;
+                  controlPlane = controlPlaneModel;
                   providerRuntimeModuleFor = buildWireGuardProviderRuntimeModule;
                   inherit wgInventory pkgs lib;
                 };
@@ -324,26 +333,33 @@
                   { }
                   nodeConfigs;
 
-                secretBindMounts =
+                secretNspawnBindFlags =
                   paths:
-                  builtins.listToAttrs (map
-                    (path: {
-                      name = path;
-                      value = {
-                        hostPath = path;
-                        isReadOnly = true;
-                      };
-                    })
-                    paths);
+                  map (path: "--bind-ro=${path}:${path}") paths;
+
+                secretContainerNames =
+                  builtins.filter
+                    (containerName: (groupedSecretPaths.${containerName} or [ ]) != [ ])
+                    (builtins.attrNames groupedConfigs);
               in
               lib.mkIf (nodeConfigs != [ ]) {
                 containers = lib.mapAttrs
                   (containerName: cfgs: {
                     config.imports = cfgs;
                   } // lib.optionalAttrs ((groupedSecretPaths.${containerName} or [ ]) != [ ]) {
-                    bindMounts = secretBindMounts groupedSecretPaths.${containerName};
+                    extraFlags = secretNspawnBindFlags groupedSecretPaths.${containerName};
                   })
                   groupedConfigs;
+
+                systemd.services = builtins.listToAttrs (map
+                  (containerName: {
+                    name = "container@${containerName}";
+                    value = {
+                      after = [ "sops-nix.service" ];
+                      requires = [ "sops-nix.service" ];
+                    };
+                  })
+                  secretContainerNames);
               };
 
             buildWireGuardProviderRenderResult =

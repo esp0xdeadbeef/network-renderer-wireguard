@@ -72,6 +72,7 @@ expect_no_hits "no raw overlay WireGuard reads" '(inventory\..*overlays.*wiregua
 expect_no_hits "no hostModule raw intent/inventory parameters" '(hostModule[^{]*\{[^}]*intent|hostModule[^{]*\{[^}]*inventory)'
 
 expect_eval_failure missingInterface "${trace_id}: WireGuard interface name required by CPM-preserved wgInventory"
+expect_eval_failure tooLongInterface "${trace_id}: WireGuard interface name from CPM-preserved wgInventory must be <= 15 characters for Linux"
 expect_eval_failure missingPrivateKeyFile "${trace_id}: WireGuard private key path required by CPM-preserved wgInventory"
 expect_eval_failure missingListenPort "${trace_id}: WireGuard listenPort required by CPM-preserved wgInventory"
 expect_eval_failure missingPeers "${trace_id}: WireGuard peers required by CPM-preserved wgInventory"

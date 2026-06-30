@@ -406,6 +406,11 @@ let
       routes.ipv6.routedClientPrefixes = [ "2001:db8:90::/64" ];
     }
   );
+  tooLongVpnInterface = evalWith (
+    lib.recursiveUpdate baseContract {
+      interfaces.vpn = "wg-remote-egress0";
+    }
+  );
   badProviderClassRenderResult =
     flake.libBySystem.${system}.renderer.buildWireGuardProviderRenderResult (
       lib.recursiveUpdate baseContract {
@@ -637,6 +642,7 @@ in
   hostOnlyNat44MissingSourceErrors = falseAssertionMessages hostOnlyNat44MissingSource;
   hostOnlyNat66MissingSourceErrors = falseAssertionMessages hostOnlyNat66MissingSource;
   hostOnlyDownstreamGuaErrors = falseAssertionMessages hostOnlyDownstreamGua;
+  tooLongVpnInterfaceErrors = falseAssertionMessages tooLongVpnInterface;
   selfHostedExposure = {
     publicEndpoint = selfHostedExposureContract.provider.publicEndpoint;
     nftables = selfHostedExposureValid.config.networking.nftables.ruleset;

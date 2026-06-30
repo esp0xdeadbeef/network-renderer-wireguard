@@ -27,7 +27,7 @@ let
     let
       rendererInput = {
         hostName = "s-router-nixos";
-        controlPlane = {
+        controlPlane.control_plane_model = {
           wgInventory.wg-mini = wgData;
           data.acme.lab.overlays.wg-mini = {
             terminateOn = [ "wg-mini-node" ];
@@ -53,6 +53,7 @@ in
 {
   valid = forceNetdevs baseWgData;
   missingInterface = forceNetdevs (builtins.removeAttrs baseWgData [ "interface" ]);
+  tooLongInterface = forceNetdevs (baseWgData // { interface = "wg-remote-egress0"; });
   missingPrivateKeyFile = forceNetdevs (builtins.removeAttrs baseWgData [ "privateKeyFile" ]);
   missingListenPort = forceNetdevs (builtins.removeAttrs baseWgData [ "listenPort" ]);
   missingPeers = forceNetdevs (builtins.removeAttrs baseWgData [ "peers" ]);

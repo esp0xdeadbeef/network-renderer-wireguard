@@ -38,7 +38,7 @@ let
     interfaces = {
       wan = "uplink0";
       lan = "edge-lan0";
-      vpn = "wg-remote-egress0";
+      vpn = "wg-re-egress0";
     };
     profile = {
       mode = "generated-peer";

@@ -299,6 +299,10 @@ host_only_downstream_gua_errors="$(eval_json hostOnlyDownstreamGuaErrors)"
 grep -Fq "host-only-128 prefix authority must not expose routed or provider-owned downstream GUA prefixes" <<<"${host_only_downstream_gua_errors}" || \
   fail "host-only downstream GUA refusal assertion missing"
 
+too_long_vpn_interface_errors="$(eval_json tooLongVpnInterfaceErrors)"
+grep -Fq "interfaces.vpn must be a non-empty Linux interface name with length <= 15" <<<"${too_long_vpn_interface_errors}" || \
+  fail "too-long VPN interface assertion missing"
+
 host_only="$(eval_json hostOnly)"
 for phrase in \
   '"prefixAuthority":"host-only-128"' \
