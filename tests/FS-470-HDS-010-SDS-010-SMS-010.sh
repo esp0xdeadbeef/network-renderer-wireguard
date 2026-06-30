@@ -97,7 +97,12 @@ render_json="$(nix eval --impure --no-warn-dirty --json --expr "
         generatedConfigPath = \"/run/network-renderer-wireguard/sms010-generated.conf\";
       };
       dns.mode = \"default\";
-      firewall.mode = \"dedicated-gateway\";
+      firewall = {
+        mode = \"dedicated-gateway\";
+        allowLanToVpn = true;
+        denyLanToWan = true;
+        denyWanToLan = true;
+      };
       lan.ipv4.address = \"10.147.0.1/24\";
       lan.ipv6.address = \"fd47:147::1/64\";
       nat = {
@@ -192,7 +197,12 @@ module_json="$(nix eval --impure --no-warn-dirty --json --expr "
         generatedConfigPath = \"/run/wg-generated.conf\";
       };
       dns.mode = \"default\";
-      firewall.mode = \"dedicated-gateway\";
+      firewall = {
+        mode = \"dedicated-gateway\";
+        allowLanToVpn = true;
+        denyLanToWan = true;
+        denyWanToLan = true;
+      };
       lan.ipv4.address = \"10.99.0.1/24\";
       nat = {
         ipv4.enable = true;

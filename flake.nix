@@ -27,6 +27,8 @@
       mkSystemLib =
         system:
         let
+          sms041TraceId = "FS-470-HDS-010-SDS-010-SMS-041";
+          sms041Diagnostic = message: "${sms041TraceId}: ${message}";
           providerContractCm = import ./s88/ControlModule/provider-contract.nix { inherit lib; };
           renderResultCm = import ./s88/ControlModule/render-result.nix { };
           validateProviderContract =
@@ -127,14 +129,14 @@
                       if wgData ? interface && builtins.isString wgData.interface && wgData.interface != "" then
                         wgData.interface
                       else
-                        throw "network-renderer-wireguard: inventory overlay ${node.overlayName} wireguard data requires explicit interface name";
+                        throw (sms041Diagnostic "WireGuard interface name required by CPM provider contract, cannot default to \"wg-egress\" for inventory overlay ${node.overlayName}");
                     privateKeyFile =
                       if wgData ? privateKeyFile
                          && builtins.isString wgData.privateKeyFile
                          && wgData.privateKeyFile != "" then
                         wgData.privateKeyFile
                       else
-                        throw "network-renderer-wireguard: inventory overlay ${node.overlayName} wireguard data requires explicit privateKeyFile";
+                        throw (sms041Diagnostic "WireGuard private key path required by CPM provider contract for inventory overlay ${node.overlayName}, cannot construct a default private key path");
                     listenPort = wgData.listenPort or null;
                     netdevName = "40-${wgIface}";
                     secretPaths = lib.unique (
@@ -253,8 +255,8 @@
             # FS-470-HDS-010-SDS-010-SMS-021: Accepts only CPM output (controlPlane).
             # wgInventory is extracted from controlPlane internally — no separate
             # parameter, no path-based API, no inventory tree walking.
-            # CPM_GAP: controlPlane does not yet emit wgInventory.
-            # When absent, no wireguard containers are created (graceful no-op).
+            # When CPM output omits wgInventory, this renderer has no WireGuard
+            # authority for that host and creates no containers.
 
             hostModule =
               rendererInput:

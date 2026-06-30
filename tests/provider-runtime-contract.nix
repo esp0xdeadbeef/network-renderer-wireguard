@@ -101,6 +101,7 @@ let
         dnsMode
         nat44Enable
         prefixAuthority
+        profileMode
         publicIngress
         portForwards
         providerClass
@@ -441,6 +442,26 @@ let
       };
     }
   );
+  missingProfileModeResult = forceEval (
+    baseContract
+    // {
+      profile = builtins.removeAttrs baseContract.profile [ "mode" ];
+    }
+  );
+  healthCheckMissingTarget = evalWith (
+    lib.recursiveUpdate baseContract {
+      services.healthCheck = {
+        enable = true;
+        interval = "30s";
+      };
+    }
+  );
+  firewallMissingAction = evalWith (
+    baseContract
+    // {
+      firewall = builtins.removeAttrs baseContract.firewall [ "allowLanToVpn" ];
+    }
+  );
   generatedPeerContract =
     lib.recursiveUpdate baseContract {
       profile = {
@@ -499,6 +520,15 @@ let
           allowedIPs = [ "0.0.0.0/0" ];
         }
       ];
+    }
+  );
+  generatedPeerMissingPrivateKey = evalWith (
+    generatedPeerContract
+    // {
+      profile = generatedPeerContract.profile // {
+        generatedPeer =
+          builtins.removeAttrs generatedPeerContract.profile.generatedPeer [ "privateKeyFile" ];
+      };
     }
   );
   fs100ProvenanceContract =
@@ -680,6 +710,9 @@ in
     trace = nameInferenceRenderResult.trace;
   };
   generatedPeerMissingEndpointErrors = falseAssertionMessages generatedPeerMissingEndpoint;
+  generatedPeerMissingPrivateKeyErrors = falseAssertionMessages generatedPeerMissingPrivateKey;
+  healthCheckMissingTargetErrors = falseAssertionMessages healthCheckMissingTarget;
+  firewallMissingActionErrors = falseAssertionMessages firewallMissingAction;
 
   renderResultShape = {
     inherit (renderResult)
@@ -711,6 +744,7 @@ in
     missingPublicIngressListResult
     missingPortForwardsListResult
     missingNat44ModeResult
+    missingProfileModeResult
     badProviderClassRenderResult
     badProviderModeRenderResult
     badPrefixAuthorityRenderResult

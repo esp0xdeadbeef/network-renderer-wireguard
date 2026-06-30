@@ -109,9 +109,10 @@ inputs.network-renderer-wireguard.libBySystem.${system}.renderer.hostModule {
 }
 ```
 
-**CPM_GAP**: `controlPlane` does not yet emit `wgInventory`. When absent,
-no wireguard containers are created (graceful no-op). This gap must be closed
-in `network-control-plane-model` before live WireGuard overlays can render.
+When CPM output omits `wgInventory`, the renderer has no WireGuard authority
+for that host and creates no WireGuard containers. Live WireGuard overlays must
+arrive through CPM-preserved `controlPlane.wgInventory`; the renderer must not
+recover by reading raw inventory or provider profile files.
 
 ### buildWireGuardProviderRenderResult / buildWireGuardProviderRuntimeModule
 
