@@ -2,17 +2,6 @@
 # GAMP-ID: FS-470-HDS-010-SDS-010-SMS-050
 # GAMP-SCOPE: software-module-test
 # Focused construction test: WireGuard renderer fail-closed contract.
-# Source-scans WG production code for 'or' fallback defaults on
-# network-affecting fields where the renderer should fail closed.
-#
-# SMS acceptance predicates:
-#   P1: No 'or "dedicated-gateway"' firewall-mode default (must throw, not default).
-#   P2: No 'or true' / 'or false' on NAT enable fields without documented optional.
-#   P3: No 'or "auto"' on WAN addressing method fields.
-#   P4: No 'or "allow"' / 'or "deny"' on firewall rule action fields.
-#
-# Active seeded negatives: inject violating patterns, verify detection + recovery.
-# KNOWN_GAPS: pre-existing hits that are permitted (documented but not yet fixed).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,226 +9,156 @@ cd "${repo_root}"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
-all_checks_passed=true
+failures=0
 
 src_dirs=("s88" "modules")
+
+record_failure() {
+  local message="$1"
+  echo "  FAIL: ${message}" >&2
+  failures=$((failures + 1))
+}
+
+scan_forbidden() {
+  local name="$1"
+  local pattern="$2"
+  local hits
+
+  hits=$(find "${src_dirs[@]}" -name '*.nix' -print0 2>/dev/null | xargs -0 grep -nE "${pattern}" 2>/dev/null || true)
+  if [[ -n "${hits}" ]]; then
+    printf '%s\n' "${hits}" | sed 's/^/  HIT: /'
+    record_failure "${name}"
+  else
+    echo "  PASS: ${name}"
+  fi
+}
+
+seeded_negative() {
+  local name="$1"
+  local pattern="$2"
+  local file="$3"
+  local content="$4"
+  local path="${tmp_dir}/${file}"
+
+  printf '%s\n' "${content}" > "${path}"
+  if grep -nE "${pattern}" "${path}" >/dev/null 2>&1; then
+    echo "  PASS: ${name} detected"
+  else
+    record_failure "${name} missed"
+  fi
+
+  rm -f "${path}"
+  if grep -rnE "${pattern}" "${tmp_dir}" >/dev/null 2>&1; then
+    record_failure "${name} recovery left residual hits"
+  else
+    echo "  PASS: ${name} recovery clean"
+  fi
+}
+
 echo "--- FS-470-HDS-010-SDS-010-SMS-050: WG Fail-Closed Contract Scan ---"
 echo ""
 
-# ================================================================
-# KNOWN_GAPS: pre-existing hits that are permitted until CMC remediation
-# ================================================================
-KNOWN_GAPS=(
-  # GAP-FC-001: provider-contract.nix defaults firewallMode to "dedicated-gateway"
-  # when contract is silent — should fail closed per SMS-050.
-  # GAP-FC-002: provider-contract.nix defaults wanIPv4Method/wanIPv6Method to
-  # "auto" — addressing mode should be explicit per SMS-050.
-  # GAP-FC-003: provider-contract.nix defaults ownNetworkStack and enableHealthCheck
-  # to true — network-affecting defaults.
-  # These are tracked for CMC remediation; the test proves the gap exists.
-)
-
-is_known_gap() {
-  local file="$1"
-  local line="$2"
-  local key="${file}:${line}"
-  for gap in "${KNOWN_GAPS[@]}"; do
-    if [[ "${gap}" == "${key}"* ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
-
-# ================================================================
-# Check 1: Scan for 'or' defaults on network-affecting fields
-# SMS-050: "Classify every 'or <value>' fallback in WG renderer source"
-# ================================================================
-echo "--- Check 1: 'or' defaults on network-affecting fields ---"
-or_violations=0
-
-for dir in "${src_dirs[@]}"; do
-  hits=$(find "${repo_root}/${dir}" -name '*.nix' -print0 2>/dev/null | \
-    xargs -0 grep -nE '\bor\s+' 2>/dev/null | \
-    grep -vE '^\s*(#|//)|or\s+(false|0[^0-9]|\[\]|\{\}|null|\"\"|true|1[^0-9])' | \
-    grep -vE '(lib\.|pkgs\.|\.\.\.|import\s|builtins\.|nixpkgs\.)' || true)
-  if [[ -n "${hits}" ]]; then
-    while IFS= read -r hit_line; do
-      [[ -z "${hit_line}" ]] && continue
-      file_path="${hit_line%%:*}"
-      rest="${hit_line#*:}"
-      lineno="${rest%%:*}"
-      rel_path="${file_path#${repo_root}/}"
-      if is_known_gap "${rel_path}" "${lineno}"; then
-        echo "  KNOWN_GAP: ${rel_path}:${lineno}"
-        continue
-      fi
-      content="${rest#*:}"
-      echo "  HIT: ${rel_path}:${lineno} — 'or' default: ${content:0:80}"
-    done <<< "${hits}"
-  fi
-done
-
-# Count only non-known-gap hits for violation count
-or_hits_count=$(find "${repo_root}/${src_dirs[0]}" "${repo_root}/${src_dirs[1]}" -name '*.nix' -print0 2>/dev/null | \
-  xargs -0 grep -cE '\bor\s+' 2>/dev/null | \
-  grep -v ':0$' | awk -F: '{s+=$2} END {print s+0}' || echo 0)
-
-echo "  Network-affecting 'or' defaults: scanner operational (${or_hits_count} total in source)"
-echo "  New violations beyond KNOWN_GAPS: ${or_violations}"
+echo "--- Check 1: no hardcoded firewall-mode fallback ---"
+scan_forbidden "no 'or \"dedicated-gateway\"' fallback" '\bor[[:space:]]+"dedicated-gateway"'
+scan_forbidden "no get default to dedicated-gateway" 'get[[:space:]]+\[[^]]*"firewall"[^]]*"mode"[^]]*\][[:space:]]+"dedicated-gateway"'
 echo ""
 
-# ================================================================
-# Check 2: Specifically forbid 'or "dedicated-gateway"' firewall default
-# SMS-050: "WG renderer defaults firewallMode to 'dedicated-gateway' when
-# contract is silent. This SMS-050 requires those to fail closed."
-# ================================================================
-echo "--- Check 2: 'or \"dedicated-gateway\"' firewall default ---"
-fw_violations=0
-
-for dir in "${src_dirs[@]}"; do
-  hits=$(find "${repo_root}/${dir}" -name '*.nix' -print0 2>/dev/null | \
-    xargs -0 grep -n 'dedicated-gateway' 2>/dev/null | \
-    grep -vE '^\s*(#|//)' || true)
-  if [[ -n "${hits}" ]]; then
-    while IFS= read -r hit_line; do
-      [[ -z "${hit_line}" ]] && continue
-      file_path="${hit_line%%:*}"
-      rest="${hit_line#*:}"
-      lineno="${rest%%:*}"
-      rel_path="${file_path#${repo_root}/}"
-      if is_known_gap "${rel_path}" "${lineno}"; then
-        echo "  KNOWN_GAP: ${rel_path}:${lineno} — GAP-FC-001 (firewallMode default)"
-        continue
-      fi
-      content="${rest#*:}"
-      if echo "${content}" | grep -qE 'or\s+\"dedicated-gateway\"'; then
-        echo "  KNOWN_GAP: ${rel_path}:${lineno} — GAP-FC-001: firewallMode defaults to 'dedicated-gateway'"
-      else
-        echo "  OK: ${rel_path}:${lineno} — 'dedicated-gateway' used in non-default context"
-      fi
-    done <<< "${hits}"
-  fi
-done
-
-echo "  Firewall-mode defaults: GAP-FC-001 tracked (firewallMode defaults to 'dedicated-gateway')"
+echo "--- Check 2: no hardcoded WAN addressing fallback ---"
+scan_forbidden "no 'or \"auto\"' WAN fallback" '\bor[[:space:]]+"auto"'
+scan_forbidden "no get default to auto for WAN IPv4" 'get[[:space:]]+\[[^]]*"wan"[^]]*"ipv4"[^]]*"method"[^]]*\][[:space:]]+"auto"'
+scan_forbidden "no get default to auto for WAN IPv6" 'get[[:space:]]+\[[^]]*"wan"[^]]*"ipv6"[^]]*"method"[^]]*\][[:space:]]+"auto"'
 echo ""
 
-# ================================================================
-# Check 3: No 'or "auto"' on WAN addressing method
-# ================================================================
-echo "--- Check 3: 'or \"auto\"' WAN addressing method defaults ---"
-wan_violations=0
-
-for dir in "${src_dirs[@]}"; do
-  hits=$(find "${repo_root}/${dir}" -name '*.nix' -print0 2>/dev/null | \
-    xargs -0 grep -nE 'or\s+\"auto\"' 2>/dev/null | \
-    grep -vE '^\s*(#|//)' || true)
-  if [[ -n "${hits}" ]]; then
-    while IFS= read -r hit_line; do
-      [[ -z "${hit_line}" ]] && continue
-      file_path="${hit_line%%:*}"
-      rest="${hit_line#*:}"
-      lineno="${rest%%:*}"
-      rel_path="${file_path#${repo_root}/}"
-      if is_known_gap "${rel_path}" "${lineno}"; then
-        echo "  KNOWN_GAP: ${rel_path}:${lineno}"
-        continue
-      fi
-      echo "  KNOWN_GAP: ${rel_path}:${lineno} — GAP-FC-002: WAN method defaults to 'auto'"
-    done <<< "${hits}"
-  fi
-done
-
-echo "  WAN method defaults: GAP-FC-002 tracked"
+echo "--- Check 3: no NAT/firewall action boolean fallback ---"
+scan_forbidden "no NAT enable bool default" 'get[[:space:]]+\[[^]]*"nat"[^]]*"ipv[46]"[^]]*"enable"[^]]*\][[:space:]]+(true|false)'
+scan_forbidden "no firewall allowLanToVpn bool default" 'get[[:space:]]+\[[^]]*"firewall"[^]]*"allowLanToVpn"[^]]*\][[:space:]]+(true|false)'
+scan_forbidden "no firewall denyLanToWan bool default" 'get[[:space:]]+\[[^]]*"firewall"[^]]*"denyLanToWan"[^]]*\][[:space:]]+(true|false)'
+scan_forbidden "no firewall denyWanToLan bool default" 'get[[:space:]]+\[[^]]*"firewall"[^]]*"denyWanToLan"[^]]*\][[:space:]]+(true|false)'
+scan_forbidden "no firewall action string fallback" '\bor[[:space:]]+"(allow|deny)"'
 echo ""
 
-# ================================================================
-# Seeded Negative 1: Inject 'or "dedicated-gateway"' default
-# ================================================================
-echo "--- Seeded Negative 1: Inject 'or \"dedicated-gateway\"' default ---"
-sn1_dir="${tmp_dir}/sn1"
-mkdir -p "${sn1_dir}"
-cat > "${sn1_dir}/bad-firewall.nix" << 'SN1EOF'
-{ lib, contract }:
+echo "--- Check 4: active Nix normalization keeps silent fields null ---"
+if nix eval --raw --impure --expr '
 let
-  # VIOLATION: hardcoded firewall mode default
-  firewallMode = contract.firewallMode or "dedicated-gateway";
+  repoRoot = builtins.getEnv "PWD";
+  flake = builtins.getFlake repoRoot;
+  pkgs = import flake.inputs.nixpkgs { system = builtins.currentSystem; };
+  cm = import (repoRoot + "/s88/ControlModule/provider-contract.nix") { lib = pkgs.lib; };
+  contract = {
+    id = "sms050-null-default-check";
+    provider = {
+      class = "commercial-imported";
+      mode = "egress-only";
+      prefixAuthority = "none";
+    };
+    interfaces = {
+      wan = "eth0";
+      lan = "lan0";
+      vpn = "wg0";
+    };
+    profile = {
+      mode = "profile-import";
+      path = "/run/test/wg.conf";
+      format = "wireguard";
+    };
+    dns.mode = "default";
+    runtime.uuidFile = "/run/network-renderer-wireguard/test.uuid";
+    publicIngress = [ ];
+    portForwards = [ ];
+    lan.ipv4.address = "10.66.0.1/24";
+    nat = {
+      ipv4 = {
+        enable = true;
+        sourceCidrs = [ "10.66.0.0/24" ];
+      };
+      ipv6 = {
+        enable = false;
+        sourceCidrs = [ ];
+      };
+    };
+    wan = {
+      ipv4 = { };
+      ipv6 = { };
+    };
+    firewall = { };
+  };
+  state = cm.normalize contract;
 in
-{ result = firewallMode; }
-SN1EOF
-
-sn1_hits=$(grep -nE 'or\s+\"dedicated-gateway\"' "${sn1_dir}/bad-firewall.nix" 2>/dev/null || true)
-if [[ -n "${sn1_hits}" ]]; then
-  echo "  PASS: Seeded negative 1 caught — scanner detects 'or \"dedicated-gateway\"' default"
+  if state.firewallMode == null
+     && state.allowLanToVpn == null
+     && state.denyLanToWan == null
+     && state.denyWanToLan == null
+     && state.wanIPv4Method == null
+     && state.wanIPv6Method == null
+  then "ok"
+  else throw "FS-470-HDS-010-SDS-010-SMS-050: silent firewall/WAN fields must remain null"
+' >/dev/null; then
+  echo "  PASS: silent firewall/WAN fields normalize to null"
 else
-  echo "  FAIL: Seeded negative 1 missed — scanner did not detect 'or \"dedicated-gateway\"'"
-  all_checks_passed=false
-fi
-
-rm -f "${sn1_dir}/bad-firewall.nix"
-sn1_clean=$(grep -rnE 'or\s+\"dedicated-gateway\"' "${sn1_dir}" 2>/dev/null || true)
-if [[ -z "${sn1_clean}" ]]; then
-  echo "  PASS: Seeded negative 1 recovery — clean after removal"
-else
-  echo "  FAIL: Seeded negative 1 recovery — residual violations"
-  all_checks_passed=false
+  record_failure "silent firewall/WAN fields did not normalize to null"
 fi
 echo ""
 
-# ================================================================
-# Seeded Negative 2: Inject 'or "allow"' firewall rule default
-# ================================================================
-echo "--- Seeded Negative 2: Inject 'or \"allow\"' firewall rule default ---"
-sn2_dir="${tmp_dir}/sn2"
-mkdir -p "${sn2_dir}"
-cat > "${sn2_dir}/bad-allow.nix" << 'SN2EOF'
-{ lib, contract }:
-let
-  # VIOLATION: hardcoded firewall action default
-  action = contract.allowLanToVpn or "allow";
-in
-{ result = action; }
-SN2EOF
-
-sn2_hits=$(grep -nE '\bor\s+\"allow\"' "${sn2_dir}/bad-allow.nix" 2>/dev/null || true)
-if [[ -n "${sn2_hits}" ]]; then
-  echo "  PASS: Seeded negative 2 caught — scanner detects 'or \"allow\"' default"
-else
-  echo "  FAIL: Seeded negative 2 missed — scanner did not detect 'or \"allow\"'"
-  all_checks_passed=false
-fi
-
-rm -f "${sn2_dir}/bad-allow.nix"
-sn2_clean=$(grep -rnE '\bor\s+\"allow\"' "${sn2_dir}" 2>/dev/null || true)
-if [[ -z "${sn2_clean}" ]]; then
-  echo "  PASS: Seeded negative 2 recovery — clean after removal"
-else
-  echo "  FAIL: Seeded negative 2 recovery — residual violations"
-  all_checks_passed=false
-fi
+echo "--- Seeded negatives ---"
+seeded_negative "SN1 dedicated-gateway fallback" '\bor[[:space:]]+"dedicated-gateway"' "bad-firewall.nix" '{ contract }: contract.firewall.mode or "dedicated-gateway"'
+seeded_negative "SN2 WAN auto fallback" '\bor[[:space:]]+"auto"' "bad-wan.nix" '{ contract }: contract.wan.ipv4.method or "auto"'
+seeded_negative "SN3 firewall allow fallback" '\bor[[:space:]]+"allow"' "bad-action.nix" '{ contract }: contract.firewall.allowLanToVpn or "allow"'
+seeded_negative "SN4 NAT enable bool default" 'get[[:space:]]+\[[^]]*"nat"[^]]*"ipv4"[^]]*"enable"[^]]*\][[:space:]]+false' "bad-nat.nix" 'nat44Enable = get [ "nat" "ipv4" "enable" ] false;'
 echo ""
 
-# ================================================================
-# Final report
-# ================================================================
 echo "============================================================"
 echo "FS-470-HDS-010-SDS-010-SMS-050 Fail-Closed Contract Summary"
 echo "============================================================"
-echo "  Check 1 (or defaults scan):       scanner operational"
-echo "  Check 2 (firewallMode default):   GAP-FC-001 tracked"
-echo "  Check 3 (WAN method defaults):    GAP-FC-002 tracked"
-echo "  Seeded negatives:                  SN1 (dedicated-gateway), SN2 (allow)"
-echo "  KNOWN_GAPS:                       GAP-FC-001, GAP-FC-002"
-echo ""
 
-if [[ "${all_checks_passed}" == "true" ]]; then
-  echo "PASS: FS-470-HDS-010-SDS-010-SMS-050 — WG fail-closed contract scanner operational."
-  echo "  2 known gaps documented. 2 active seeded negatives verified (detect + recovery)."
-  echo "  GAP-FC-001: firewallMode defaults to 'dedicated-gateway' (needs CMC)."
-  echo "  GAP-FC-002: WAN method defaults to 'auto' (needs CMC)."
-  exit 0
-else
-  echo "FAIL: FS-470-HDS-010-SDS-010-SMS-050 — scanner verification failed."
+if (( failures > 0 )); then
+  echo "  Total violations: ${failures}"
+  echo "  KNOWN_GAPS:       ${failures}"
+  echo ""
+  echo "FAIL: FS-470-HDS-010-SDS-010-SMS-050 — WG fail-closed contract has unresolved fallback gaps."
   exit 1
 fi
+
+echo "  Total violations: 0"
+echo "  KNOWN_GAPS:       0"
+echo ""
+echo "PASS: FS-470-HDS-010-SDS-010-SMS-050 — WG fail-closed contract has no firewall/WAN/NAT action fallback gaps."
