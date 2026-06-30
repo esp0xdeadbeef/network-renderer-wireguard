@@ -341,8 +341,13 @@
               lib.mkIf (nodeConfigs != [ ]) {
                 containers = lib.mapAttrs
                   (containerName: cfgs: {
+                    additionalCapabilities = [
+                      "CAP_NET_ADMIN"
+                      "CAP_NET_RAW"
+                    ];
                     autoStart = true;
                     config.imports = cfgs;
+                    privateNetwork = true;
                   } // lib.optionalAttrs ((groupedSecretPaths.${containerName} or [ ]) != [ ]) {
                     extraFlags = secretNspawnBindFlags groupedSecretPaths.${containerName};
                   })

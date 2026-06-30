@@ -21,7 +21,9 @@ eval_json() {
 runtime="$(eval_json providerRuntime)"
 
 for phrase in \
+  '"additionalCapabilities":["CAP_NET_ADMIN","CAP_NET_RAW"]' \
   '"autoStart":true' \
+  '"privateNetwork":true' \
   '"providerRuntimeEnabled":true' \
   '"providerContractId":"fs470-remote-egress"' \
   '"dispatcherDescription":"Bring up provider tunnel wg-re-egress0 from model/provider contract"' \
@@ -42,7 +44,9 @@ done
 
 without_runtime="$(eval_json withoutProviderRuntime)"
 for phrase in \
+  '"additionalCapabilities":["CAP_NET_ADMIN","CAP_NET_RAW"]' \
   '"autoStart":true' \
+  '"privateNetwork":true' \
   '"hasDispatcher":false' \
   '"hasProviderRuntimeOption":false' \
   '"hasNetdevService":true'; do
