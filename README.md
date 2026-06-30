@@ -129,9 +129,11 @@ contract is absent, `hostModule` preserves the wgInventory-only path and does
 not synthesize provider runtime policy.
 
 Generated WireGuard containers are boot-time runtime targets. `hostModule`
-sets `containers.<name>.autoStart = true`; secret file paths under
-`/run/secrets/` are passed through as exact read-only nspawn binds. Secret
-creation remains the host/lab SOPS responsibility.
+sets `containers.<name>.autoStart = true`, uses a private container network
+namespace, and grants only the network capabilities required for WireGuard,
+nftables, and health probes (`CAP_NET_ADMIN`, `CAP_NET_RAW`). Secret file paths
+under `/run/secrets/` are passed through as exact read-only nspawn binds.
+Secret creation remains the host/lab SOPS responsibility.
 
 ### buildWireGuardProviderRenderResult / buildWireGuardProviderRuntimeModule
 

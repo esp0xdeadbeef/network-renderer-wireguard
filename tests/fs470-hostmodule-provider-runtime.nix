@@ -152,7 +152,7 @@ let
 in
 {
   providerRuntime = {
-    inherit (withRuntime.container) autoStart;
+    inherit (withRuntime.container) additionalCapabilities autoStart privateNetwork;
     extraFlags = withRuntime.container.extraFlags;
     providerRuntimeEnabled =
       withRuntime.config.services.network-renderer-wireguard.providerRuntime.enable;
@@ -169,7 +169,7 @@ in
   };
 
   withoutProviderRuntime = {
-    inherit (withoutRuntime.container) autoStart;
+    inherit (withoutRuntime.container) additionalCapabilities autoStart privateNetwork;
     hasDispatcher =
       withoutRuntime.config.systemd.services ? wireguard-provider-dispatcher;
     hasProviderRuntimeOption =

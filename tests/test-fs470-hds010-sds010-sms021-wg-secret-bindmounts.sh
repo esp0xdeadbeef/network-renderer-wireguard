@@ -66,6 +66,10 @@ in
     "hostModule must bind the explicit sops privateKeyFile into the generated WG container"
   && require (builtins.elem "--bind-ro=/run/secrets/wireguard-mini-provider-psk:/run/secrets/wireguard-mini-provider-psk" secretOutput.containers.wg-mini-node.extraFlags)
     "hostModule must bind explicit sops presharedKeyFile paths into the generated WG container"
+  && require (secretOutput.containers.wg-mini-node.privateNetwork == true)
+    "hostModule must isolate generated WG containers in a private network namespace"
+  && require (secretOutput.containers.wg-mini-node.additionalCapabilities == [ "CAP_NET_ADMIN" "CAP_NET_RAW" ])
+    "hostModule must grant only explicit WG runtime network capabilities"
   && require (secretOutput.containers.wg-mini-node.autoStart == true)
     "hostModule must auto-start the generated WG container at boot"
   && require (systemdServicesOf secretOutput == { })
