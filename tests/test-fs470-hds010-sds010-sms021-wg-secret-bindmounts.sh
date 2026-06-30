@@ -15,7 +15,7 @@ let
     let
       rendererInput = {
         hostName = "s-router-nixos";
-        controlPlane = {
+        controlPlane.control_plane_model = {
           inherit wgInventory;
           data.acme.lab.overlays.wg-mini = {
             terminateOn = [ "wg-mini-node" ];
@@ -28,8 +28,8 @@ let
         };
       };
     in
-      (hostModule rendererInput { config = { }; inherit lib pkgs; }).content.containers.wg-mini-node;
-  secretContainer = evalModule {
+      (hostModule rendererInput { config = { }; inherit lib pkgs; }).content;
+  secretOutput = evalModule {
     wg-mini = {
       interface = "wg-mini";
       privateKeyFile = "/run/secrets/wireguard-mini-provider-private-key";
@@ -44,7 +44,7 @@ let
       ];
     };
   };
-  nonSecretContainer = evalModule {
+  nonSecretOutput = evalModule {
     wg-mini = {
       interface = "wg-mini";
       privateKeyFile = "/etc/wireguard/wg-mini.key";
@@ -61,14 +61,18 @@ let
   };
   require = cond: msg: if cond then true else throw msg;
 in
-  require (secretContainer.bindMounts."/run/secrets/wireguard-mini-provider-private-key".hostPath == "/run/secrets/wireguard-mini-provider-private-key")
+  require (builtins.elem "--bind-ro=/run/secrets/wireguard-mini-provider-private-key:/run/secrets/wireguard-mini-provider-private-key" secretOutput.containers.wg-mini-node.extraFlags)
     "hostModule must bind the explicit sops privateKeyFile into the generated WG container"
-  && require (secretContainer.bindMounts."/run/secrets/wireguard-mini-provider-private-key".isReadOnly == true)
-    "hostModule must mount the sops privateKeyFile read-only"
-  && require (secretContainer.bindMounts."/run/secrets/wireguard-mini-provider-psk".hostPath == "/run/secrets/wireguard-mini-provider-psk")
+  && require (builtins.elem "--bind-ro=/run/secrets/wireguard-mini-provider-psk:/run/secrets/wireguard-mini-provider-psk" secretOutput.containers.wg-mini-node.extraFlags)
     "hostModule must bind explicit sops presharedKeyFile paths into the generated WG container"
-  && require (!(nonSecretContainer ? bindMounts))
-    "hostModule must not invent bind mounts for non-sops key paths"
+  && require (secretOutput.systemd.services."container@wg-mini-node".after == [ "sops-nix.service" ])
+    "hostModule must order secret-consuming containers after sops-nix.service"
+  && require (secretOutput.systemd.services."container@wg-mini-node".requires == [ "sops-nix.service" ])
+    "hostModule must require sops-nix.service for secret-consuming containers"
+  && require (!(nonSecretOutput.containers.wg-mini-node ? extraFlags))
+    "hostModule must not invent secret bind flags for non-sops key paths"
+  && require (nonSecretOutput.systemd.services == { })
+    "hostModule must not add sops ordering for non-sops key paths"
 ' >/dev/null
 
-echo "PASS FS-470-HDS-010-SDS-010-SMS-021 wg secret bind mounts"
+echo "PASS FS-470-HDS-010-SDS-010-SMS-021 wg secret file binds"

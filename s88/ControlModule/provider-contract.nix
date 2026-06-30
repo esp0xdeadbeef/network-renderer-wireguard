@@ -5,6 +5,7 @@ let
   diagnostic = message: "${sms041TraceId}: ${message}";
   pathName = path: lib.concatStringsSep "." path;
   isNonEmptyString = value: builtins.isString value && value != "";
+  isLinuxInterfaceName = value: isNonEmptyString value && builtins.stringLength value <= 15;
   peerField = peer: name: if builtins.hasAttr name peer then peer.${name} else null;
   peerString = peer: name: if isNonEmptyString (peerField peer name) then peerField peer name else null;
   peerList = peer: name: if builtins.isList (peerField peer name) then peerField peer name else [ ];
@@ -215,6 +216,18 @@ in
       {
         assertion = state.profileMode != "generated-peer" || state.profileFormat == "wireguard";
         message = diagnostic "network-renderer-wireguard generated-peer mode requires wireguard profile format";
+      }
+      {
+        assertion = isLinuxInterfaceName state.wanInterface;
+        message = diagnostic "network-renderer-wireguard interfaces.wan must be a non-empty Linux interface name with length <= 15";
+      }
+      {
+        assertion = isLinuxInterfaceName state.lanInterface;
+        message = diagnostic "network-renderer-wireguard interfaces.lan must be a non-empty Linux interface name with length <= 15";
+      }
+      {
+        assertion = isLinuxInterfaceName state.vpnInterface;
+        message = diagnostic "network-renderer-wireguard interfaces.vpn must be a non-empty Linux interface name with length <= 15";
       }
       {
         assertion = state.profileMode != "generated-peer" || isNonEmptyString state.generatedPrivateKeyFile;

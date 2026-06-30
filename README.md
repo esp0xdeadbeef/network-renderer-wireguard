@@ -104,21 +104,23 @@ internally — no separate parameter, no path-based API:
 
 ```nix
 inputs.network-renderer-wireguard.libBySystem.${system}.renderer.hostModule {
-  controlPlane = ...;  # CPM control_plane_model output (REQUIRED)
-  hostName = ...;           # host name (REQUIRED)
-  # wgInventory extracted from controlPlane.wgInventory internally
+  controlPlane = ...;  # CPM bundle containing control_plane_model (REQUIRED)
+  hostName = ...;      # host name (REQUIRED)
+  # wgInventory extracted from controlPlane.control_plane_model.wgInventory internally
   # WireGuard provider contracts extracted from
-  # controlPlane.providerContracts.wireguard internally
+  # controlPlane.control_plane_model.providerContracts.wireguard internally
 }
 ```
 
 When CPM output omits `wgInventory`, the renderer has no WireGuard authority
 for that host and creates no WireGuard containers. Live WireGuard overlays must
-arrive through CPM-preserved `controlPlane.wgInventory`; the renderer must not
-recover by reading raw inventory or provider profile files.
+arrive through CPM-preserved `controlPlane.control_plane_model.wgInventory`;
+the renderer must not recover by reading raw inventory or provider profile
+files.
 
 When CPM output carries
-`controlPlane.providerContracts.wireguard.<overlayName>`, `hostModule` imports
+`controlPlane.control_plane_model.providerContracts.wireguard.<overlayName>`,
+`hostModule` imports
 the rendered provider runtime module into the generated overlay container
 instead of creating the lighter wgInventory-only netdev service for that
 overlay. This is the active-lab path for FS-470 remote-egress NAT, DHCP, RA,

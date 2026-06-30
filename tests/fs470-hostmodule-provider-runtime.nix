@@ -9,7 +9,7 @@ let
   hostModule = flake.libBySystem.${system}.renderer.hostModule;
 
   wgData = {
-    interface = "wg-remote-egress0";
+    interface = "wg-re-egress0";
     privateKeyFile = "/run/secrets/wireguard-mini-provider-private-key";
     listenPort = 51820;
     peers = [
@@ -35,7 +35,7 @@ let
     interfaces = {
       wan = "uplink0";
       lan = "edge-lan0";
-      vpn = "wg-remote-egress0";
+      vpn = "wg-re-egress0";
     };
     profile = {
       mode = "generated-peer";
@@ -133,7 +133,7 @@ let
     let
       rendererInput = {
         hostName = "s-router-nixos";
-        controlPlane = mkControlPlane withProviderContract;
+        controlPlane.control_plane_model = mkControlPlane withProviderContract;
       };
       hostOutput = (hostModule rendererInput { config = { }; inherit lib pkgs; }).content;
       container = hostOutput.containers.wireguard-remote-egress;
@@ -152,7 +152,9 @@ let
 in
 {
   providerRuntime = {
-    bindMounts = builtins.attrNames withRuntime.container.bindMounts;
+    extraFlags = withRuntime.container.extraFlags;
+    containerUnitAfter = withRuntime.hostOutput.systemd.services."container@wireguard-remote-egress".after;
+    containerUnitRequires = withRuntime.hostOutput.systemd.services."container@wireguard-remote-egress".requires;
     providerRuntimeEnabled =
       withRuntime.config.services.network-renderer-wireguard.providerRuntime.enable;
     providerContractId =
@@ -160,7 +162,7 @@ in
     dispatcherDescription =
       withRuntime.config.systemd.services.wireguard-provider-dispatcher.description;
     hasNetdevService =
-      withRuntime.config.systemd.services ? "s88-provider-interface-wg-remote-egress0-egress";
+      withRuntime.config.systemd.services ? "s88-provider-interface-wg-re-egress0-egress";
     nftables = withRuntime.config.networking.nftables.ruleset;
     dhcp4Config =
       builtins.fromJSON withRuntime.config.environment.etc."kea/kea-dhcp4.conf".text;
@@ -173,6 +175,6 @@ in
     hasProviderRuntimeOption =
       withoutRuntime.config.services ? network-renderer-wireguard;
     hasNetdevService =
-      withoutRuntime.config.systemd.services ? "s88-provider-interface-wg-remote-egress0-egress";
+      withoutRuntime.config.systemd.services ? "s88-provider-interface-wg-re-egress0-egress";
   };
 }
