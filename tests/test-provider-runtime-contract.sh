@@ -187,6 +187,7 @@ expect_eval_failure missingRuntimePathResult "provider contract missing runtime.
 expect_eval_failure missingPublicIngressListResult "provider contract missing publicIngress"
 expect_eval_failure missingPortForwardsListResult "provider contract missing portForwards"
 expect_eval_failure missingNat44ModeResult "provider contract missing nat.ipv4.enable"
+expect_eval_failure missingProfileModeResult "FS-470-HDS-010-SDS-010-SMS-041: network-renderer-wireguard provider contract missing profile.mode"
 expect_eval_failure badProviderClassRenderResult "provider.class must be self-hosted or commercial-imported"
 expect_eval_failure badProviderModeRenderResult "provider.mode must be egress-only, public-ingress, or routed-prefix"
 expect_eval_failure badPrefixAuthorityRenderResult "provider.prefixAuthority must be none, host-only-128, routed-prefix, or provider-owned-prefix"
@@ -403,6 +404,20 @@ done
 generated_peer_missing_endpoint_errors="$(eval_json generatedPeerMissingEndpointErrors)"
 grep -Fq "generated-peer peers require endpoint" <<<"${generated_peer_missing_endpoint_errors}" || \
   fail "generated-peer missing endpoint assertion missing"
+grep -Fq "FS-470-HDS-010-SDS-010-SMS-041" <<<"${generated_peer_missing_endpoint_errors}" || \
+  fail "generated-peer missing endpoint assertion must carry SMS-041 trace ID"
+
+generated_peer_missing_private_key_errors="$(eval_json generatedPeerMissingPrivateKeyErrors)"
+grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: network-renderer-wireguard generated-peer mode requires profile.generatedPeer.privateKeyFile" <<<"${generated_peer_missing_private_key_errors}" || \
+  fail "generated-peer missing private key assertion must carry SMS-041 trace ID"
+
+health_check_missing_target_errors="$(eval_json healthCheckMissingTargetErrors)"
+grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: health check target required by CPM provider contract" <<<"${health_check_missing_target_errors}" || \
+  fail "health-check missing target assertion must carry SMS-041 trace ID"
+
+firewall_missing_action_errors="$(eval_json firewallMissingActionErrors)"
+grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: firewall rule action required by CPM provider contract, cannot default to allow or deny" <<<"${firewall_missing_action_errors}" || \
+  fail "firewall missing action assertion must carry SMS-041 trace ID"
 
 name_inference="$(eval_json nameInference)"
 for phrase in \

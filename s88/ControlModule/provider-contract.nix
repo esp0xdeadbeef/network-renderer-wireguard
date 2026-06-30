@@ -1,6 +1,8 @@
 { lib }:
 
 let
+  sms041TraceId = "FS-470-HDS-010-SDS-010-SMS-041";
+  diagnostic = message: "${sms041TraceId}: ${message}";
   pathName = path: lib.concatStringsSep "." path;
   isNonEmptyString = value: builtins.isString value && value != "";
   peerField = peer: name: if builtins.hasAttr name peer then peer.${name} else null;
@@ -27,7 +29,7 @@ in
           value = get path null;
         in
         if value == null then
-          throw "network-renderer-wireguard provider contract missing ${pathName path}"
+          throw (diagnostic "network-renderer-wireguard provider contract missing ${pathName path}")
         else
           value;
 
@@ -152,10 +154,10 @@ in
 
       generatedPeerForScript = {
         privateKeyFile =
-          if generatedPrivateKeyFile == null then
-            "/run/network-renderer-wireguard/missing-private-key"
+          if isNonEmptyString generatedPrivateKeyFile then
+            generatedPrivateKeyFile
           else
-            generatedPrivateKeyFile;
+            throw (diagnostic "WireGuard private key path required by CPM provider contract, cannot construct a default private key path");
         addresses = generatedAddresses;
         dns = generatedDns;
         mtu = generatedMtu;
@@ -177,7 +179,7 @@ in
           "self-hosted"
           "commercial-imported"
         ];
-        message = "network-renderer-wireguard provider.class must be self-hosted or commercial-imported";
+        message = diagnostic "network-renderer-wireguard provider.class must be self-hosted or commercial-imported";
       }
       {
         assertion = builtins.elem state.providerMode [
@@ -185,7 +187,7 @@ in
           "public-ingress"
           "routed-prefix"
         ];
-        message = "network-renderer-wireguard provider.mode must be egress-only, public-ingress, or routed-prefix";
+        message = diagnostic "network-renderer-wireguard provider.mode must be egress-only, public-ingress, or routed-prefix";
       }
       {
         assertion = builtins.elem state.prefixAuthority [
@@ -194,175 +196,189 @@ in
           "routed-prefix"
           "provider-owned-prefix"
         ];
-        message = "network-renderer-wireguard provider.prefixAuthority must be none, host-only-128, routed-prefix, or provider-owned-prefix";
+        message = diagnostic "network-renderer-wireguard provider.prefixAuthority must be none, host-only-128, routed-prefix, or provider-owned-prefix";
       }
       {
         assertion = builtins.elem state.profileMode [
           "profile-import"
           "generated-peer"
         ];
-        message = "network-renderer-wireguard profile.mode must be profile-import or generated-peer";
+        message = diagnostic "network-renderer-wireguard profile.mode must be profile-import or generated-peer";
       }
       {
         assertion = builtins.elem state.profileFormat [
           "wireguard"
           "openvpn"
         ];
-        message = "network-renderer-wireguard profile.format must be wireguard or openvpn";
+        message = diagnostic "network-renderer-wireguard profile.format must be wireguard or openvpn";
       }
       {
         assertion = state.profileMode != "generated-peer" || state.profileFormat == "wireguard";
-        message = "network-renderer-wireguard generated-peer mode requires wireguard profile format";
+        message = diagnostic "network-renderer-wireguard generated-peer mode requires wireguard profile format";
       }
       {
         assertion = state.profileMode != "generated-peer" || isNonEmptyString state.generatedPrivateKeyFile;
-        message = "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.privateKeyFile";
+        message = diagnostic "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.privateKeyFile";
       }
       {
         assertion = state.profileMode != "generated-peer" || state.generatedAddresses != [ ];
-        message = "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.addresses";
+        message = diagnostic "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.addresses";
       }
       {
         assertion = state.profileMode != "generated-peer" || state.generatedPeers != [ ];
-        message = "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.peers";
+        message = diagnostic "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.peers";
       }
       {
         assertion = state.profileMode != "generated-peer" || builtins.all (peer: isNonEmptyString (peerField peer "publicKey")) state.generatedPeers;
-        message = "network-renderer-wireguard generated-peer peers require publicKey";
+        message = diagnostic "network-renderer-wireguard generated-peer peers require publicKey";
       }
       {
         assertion = state.profileMode != "generated-peer" || builtins.all (peer: isNonEmptyString (peerField peer "endpoint")) state.generatedPeers;
-        message = "network-renderer-wireguard generated-peer peers require endpoint";
+        message = diagnostic "network-renderer-wireguard generated-peer peers require endpoint";
       }
       {
         assertion = state.profileMode != "generated-peer" || builtins.all (peer: peerList peer "allowedIPs" != [ ]) state.generatedPeers;
-        message = "network-renderer-wireguard generated-peer peers require allowedIPs";
+        message = diagnostic "network-renderer-wireguard generated-peer peers require allowedIPs";
       }
       {
         assertion = state.profileMode != "generated-peer" || isNonEmptyString state.generatedConfigPath;
-        message = "network-renderer-wireguard generated-peer mode requires runtime.generatedConfigPath";
+        message = diagnostic "network-renderer-wireguard generated-peer mode requires runtime.generatedConfigPath";
       }
       {
         assertion = state.providerClass != "self-hosted" || state.publicEndpoint != null;
-        message = "network-renderer-wireguard self-hosted mode requires provider.publicEndpoint";
+        message = diagnostic "network-renderer-wireguard self-hosted mode requires provider.publicEndpoint";
       }
       {
         assertion =
           state.providerClass != "self-hosted"
           || (state.publicEndpoint != null && isNonEmptyString (endpointAddress state.publicEndpoint));
-        message = "network-renderer-wireguard self-hosted public endpoint requires address, host, or name";
+        message = diagnostic "network-renderer-wireguard self-hosted public endpoint requires address, host, or name";
       }
       {
         assertion =
           state.providerClass != "self-hosted"
           || (state.publicEndpoint != null && (state.publicEndpoint.port or null) != null);
-        message = "network-renderer-wireguard self-hosted public endpoint requires port";
+        message = diagnostic "network-renderer-wireguard self-hosted public endpoint requires port";
       }
       {
         assertion = isNonEmptyString state.uuidFile;
-        message = "network-renderer-wireguard runtime.uuidFile must be explicit";
+        message = diagnostic "network-renderer-wireguard runtime.uuidFile must be explicit";
       }
       {
         assertion = state.lanAddresses != [ ];
-        message = "network-renderer-wireguard contract must provide at least one LAN address";
+        message = diagnostic "network-renderer-wireguard contract must provide at least one LAN address";
       }
       {
         assertion = (!state.dhcp4Enable) || state.lanIPv4 != null;
-        message = "network-renderer-wireguard DHCPv4 requires lan.ipv4.address";
+        message = diagnostic "network-renderer-wireguard DHCPv4 requires lan.ipv4.address";
       }
       {
         assertion = (!state.dhcp4Enable) || state.dhcp4Dns != [ ];
-        message = "network-renderer-wireguard DHCPv4 requires services.dhcp4.dns from the provider contract";
+        message = diagnostic "network-renderer-wireguard DHCPv4 requires services.dhcp4.dns from the provider contract";
       }
       {
         assertion = (!state.dhcp4Enable) || state.dhcp4LeaseFile != null;
-        message = "network-renderer-wireguard DHCPv4 requires services.dhcp4.leaseFile from the provider contract";
+        message = diagnostic "network-renderer-wireguard DHCPv4 requires services.dhcp4.leaseFile from the provider contract";
       }
       {
         assertion = (!state.raEnable) || state.lanIPv6 != null;
-        message = "network-renderer-wireguard RA requires lan.ipv6.address";
+        message = diagnostic "network-renderer-wireguard RA requires lan.ipv6.address";
       }
       {
         assertion = (!state.raEnable) || state.raRdnss != [ ];
-        message = "network-renderer-wireguard RA requires services.ra.rdnss from the provider contract";
+        message = diagnostic "network-renderer-wireguard RA requires services.ra.rdnss from the provider contract";
       }
       {
         assertion = (!state.nat44Enable) || state.nat44Sources != [ ];
-        message = "network-renderer-wireguard NAT44 requires nat.ipv4.sourceCidrs";
+        message = diagnostic "network-renderer-wireguard NAT44 requires nat.ipv4.sourceCidrs";
       }
       {
         assertion = (!state.nat66Enable) || state.nat66Sources != [ ];
-        message = "network-renderer-wireguard NAT66 requires nat.ipv6.sourceCidrs";
+        message = diagnostic "network-renderer-wireguard NAT66 requires nat.ipv6.sourceCidrs";
       }
       {
         assertion = state.nat44ToAddress == null || isNonEmptyString state.nat44ToAddress;
-        message = "network-renderer-wireguard NAT44 SNAT target requires nat.ipv4.toAddress";
+        message = diagnostic "network-renderer-wireguard NAT44 SNAT target requires nat.ipv4.toAddress";
       }
       {
         assertion = state.nat66ToAddress == null || isNonEmptyString state.nat66ToAddress;
-        message = "network-renderer-wireguard NAT66 SNAT target requires nat.ipv6.toAddress";
+        message = diagnostic "network-renderer-wireguard NAT66 SNAT target requires nat.ipv6.toAddress";
       }
       {
         assertion =
           state.providerMode != "routed-prefix"
           || state.routedIPv6Prefixes != [ ]
           || state.providerOwnedIPv6Prefixes != [ ];
-        message = "network-renderer-wireguard routed-prefix mode requires routes.ipv6.routedClientPrefixes or routes.ipv6.providerOwnedPrefixes";
+        message = diagnostic "network-renderer-wireguard routed-prefix mode requires routes.ipv6.routedClientPrefixes or routes.ipv6.providerOwnedPrefixes";
       }
       {
         assertion =
           state.providerMode != "public-ingress"
           || state.normalizedPublicIngress != [ ]
           || state.normalizedPortForwards != [ ];
-        message = "network-renderer-wireguard public-ingress mode requires publicIngress or portForwards contracts";
+        message = diagnostic "network-renderer-wireguard public-ingress mode requires publicIngress or portForwards contracts";
       }
       {
         assertion =
           state.providerClass != "commercial-imported"
           || state.normalizedPublicIngress == [ ]
           || state.publicIngressAuthority;
-        message = "network-renderer-wireguard commercial-imported public ingress requires provider.publicIngressAuthority";
+        message = diagnostic "network-renderer-wireguard commercial-imported public ingress requires provider.publicIngressAuthority";
       }
       {
         assertion =
           state.providerClass != "commercial-imported"
           || (state.routedIPv6Prefixes == [ ] && state.providerOwnedIPv6Prefixes == [ ])
           || state.routedClientPrefixAuthority;
-        message = "network-renderer-wireguard commercial-imported routed prefixes require provider.routedClientPrefixAuthority";
+        message = diagnostic "network-renderer-wireguard commercial-imported routed prefixes require provider.routedClientPrefixAuthority";
       }
       {
         assertion = state.providerMode != "routed-prefix" || !state.nat66Enable;
-        message = "network-renderer-wireguard routed client GUA mode must not enable NAT66";
+        message = diagnostic "network-renderer-wireguard routed client GUA mode must not enable NAT66";
+      }
+      {
+        assertion = (!state.enableHealthCheck) || state.healthTarget4 != null;
+        message = diagnostic "health check target required by CPM provider contract, cannot default to \"1.1.1.1\"";
+      }
+      {
+        assertion =
+          state.firewallMode != "dedicated-gateway"
+          || (
+            builtins.isBool state.allowLanToVpn
+            && builtins.isBool state.denyLanToWan
+            && builtins.isBool state.denyWanToLan
+          );
+        message = diagnostic "firewall rule action required by CPM provider contract, cannot default to allow or deny";
       }
       {
         assertion = state.prefixAuthority != "routed-prefix" || state.routedIPv6Prefixes != [ ];
-        message = "network-renderer-wireguard routed-prefix authority requires routes.ipv6.routedClientPrefixes";
+        message = diagnostic "network-renderer-wireguard routed-prefix authority requires routes.ipv6.routedClientPrefixes";
       }
       {
         assertion = state.prefixAuthority != "provider-owned-prefix" || state.providerOwnedIPv6Prefixes != [ ];
-        message = "network-renderer-wireguard provider-owned-prefix authority requires routes.ipv6.providerOwnedPrefixes";
+        message = diagnostic "network-renderer-wireguard provider-owned-prefix authority requires routes.ipv6.providerOwnedPrefixes";
       }
       {
         assertion = (!state.hasClientPrefixAuthority) || state.normalizedReturnRoutes != [ ];
-        message = "network-renderer-wireguard routed or provider-owned client prefixes require explicit return routes";
+        message = diagnostic "network-renderer-wireguard routed or provider-owned client prefixes require explicit return routes";
       }
       {
         assertion = (!state.hasClientPrefixAuthority) || !state.nat66Enable;
-        message = "network-renderer-wireguard routed or provider-owned client prefixes must not enable NAT66";
+        message = diagnostic "network-renderer-wireguard routed or provider-owned client prefixes must not enable NAT66";
       }
       {
         assertion = (!state.hasClientPrefixAuthority) || !(isGlobalUnicastIPv6 state.lanIPv6);
-        message = "network-renderer-wireguard routed or provider-owned client prefixes must not assign client GUA to router LAN interfaces";
+        message = diagnostic "network-renderer-wireguard routed or provider-owned client prefixes must not assign client GUA to router LAN interfaces";
       }
       {
         assertion =
           state.prefixAuthority != "host-only-128"
           || (state.routedIPv6Prefixes == [ ] && state.providerOwnedIPv6Prefixes == [ ]);
-        message = "network-renderer-wireguard host-only-128 prefix authority must not expose routed or provider-owned downstream GUA prefixes";
+        message = diagnostic "network-renderer-wireguard host-only-128 prefix authority must not expose routed or provider-owned downstream GUA prefixes";
       }
       {
         assertion = builtins.all isNonEmptyString state.providerOwnedIPv6Prefixes;
-        message = "network-renderer-wireguard provider-owned prefixes must be non-empty strings";
+        message = diagnostic "network-renderer-wireguard provider-owned prefixes must be non-empty strings";
       }
       {
         assertion =
@@ -372,11 +388,11 @@ in
             && isNonEmptyString route.gateway
             && isNonEmptyString route.interface
           ) state.normalizedReturnRoutes;
-        message = "network-renderer-wireguard return routes require destination, gateway, and interface";
+        message = diagnostic "network-renderer-wireguard return routes require destination, gateway, and interface";
       }
       {
         assertion = builtins.all (route: route.interface == state.lanInterface) state.normalizedReturnRoutes;
-        message = "network-renderer-wireguard return route projection currently requires interface to match interfaces.lan";
+        message = diagnostic "network-renderer-wireguard return route projection currently requires interface to match interfaces.lan";
       }
       {
         assertion =
@@ -389,7 +405,7 @@ in
             && isNonEmptyString ingress.ingressInterface
             && isNonEmptyString ingress.targetInterface
           ) state.normalizedPublicIngress;
-        message = "network-renderer-wireguard public ingress entries require protocol, listenPort, targetAddress, targetPort, ingressInterface, and targetInterface";
+        message = diagnostic "network-renderer-wireguard public ingress entries require protocol, listenPort, targetAddress, targetPort, ingressInterface, and targetInterface";
       }
       {
         assertion =
@@ -402,11 +418,11 @@ in
             && isNonEmptyString forward.ingressInterface
             && isNonEmptyString forward.targetInterface
           ) state.normalizedPortForwards;
-        message = "network-renderer-wireguard port forwards require protocol, listenPort, targetAddress, targetPort, ingressInterface, and targetInterface";
+        message = diagnostic "network-renderer-wireguard port forwards require protocol, listenPort, targetAddress, targetPort, ingressInterface, and targetInterface";
       }
       {
         assertion = (!state.enableHealthCheck) || state.healthInterval != null;
-        message = "network-renderer-wireguard health check requires services.healthCheck.interval when enabled";
+        message = diagnostic "network-renderer-wireguard health check requires services.healthCheck.interval when enabled";
       }
     ];
 }

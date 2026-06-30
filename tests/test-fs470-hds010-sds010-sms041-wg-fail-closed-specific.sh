@@ -14,8 +14,6 @@
 #   P7: Fail-closed throws reference SMS-041 trace-chain ID (SMS §Forbidden
 #       Default paragraphs specify exact throw message format).
 #
-# All pre-existing violations are documented as KNOWN_GAPS.
-# Test PASSES with existing gaps; FAILS only on NEW violations.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,24 +23,49 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 all_checks_passed=true
 
+eval_json() {
+  local attr="$1"
+  nix eval --json --impure --file tests/provider-runtime-contract.nix "${attr}"
+}
+
+expect_eval_failure() {
+  local attr="$1"
+  local phrase="$2"
+  local stderr_path
+  stderr_path="$(mktemp)"
+  if nix eval --json --impure --file tests/provider-runtime-contract.nix "${attr}" >/dev/null 2>"${stderr_path}"; then
+    echo "  FAIL: ${attr} was accepted"
+    all_checks_passed=false
+  elif grep -Fq "${phrase}" "${stderr_path}"; then
+    echo "  PASS: ${attr} rejected with SMS-041 diagnostic"
+  else
+    cat "${stderr_path}" >&2
+    echo "  FAIL: ${attr} diagnostic did not contain: ${phrase}"
+    all_checks_passed=false
+  fi
+  rm -f "${stderr_path}"
+}
+
+expect_json_message() {
+  local attr="$1"
+  local phrase="$2"
+  local json
+  json="$(eval_json "${attr}")"
+  if grep -Fq "${phrase}" <<<"${json}"; then
+    echo "  PASS: ${attr} emitted SMS-041 diagnostic"
+  else
+    echo "${json}" >&2
+    echo "  FAIL: ${attr} did not contain: ${phrase}"
+    all_checks_passed=false
+  fi
+}
+
 # Production source directories + flake.nix
 src_dirs=("s88" "modules")
 flake_file="flake.nix"
 
 echo "--- FS-470-HDS-010-SDS-010-SMS-041: WG Fail-Closed Specific Defaults Scan ---"
 echo ""
-
-# ================================================================
-# KNOWN_GAPS: pre-existing hits that are permitted
-# ================================================================
-KNOWN_GAPS=(
-  # GAP-MSG-041: throw messages at guard points do not yet include
-  # FS-470-HDS-010-SDS-010-SMS-041 trace-chain ID.
-  # The code uses `throw "network-renderer-wireguard: ..."` and
-  # `required` (which throws with its own message) instead of the
-  # SMS-prescribed format `throw "FS-470-HDS-010-SDS-010-SMS-041: ..."`.
-  # Tracked for CMC remediation; does not affect fail-closed behavior.
-)
 
 # ================================================================
 # Check 1: Forbidden default — or "wg-egress" (interface name)
@@ -313,11 +336,30 @@ fi
 if [[ "${traceid_hits}" -gt 0 ]]; then
   echo "  PASS: SMS-041 trace ID found in ${traceid_hits} source file(s)"
 else
-  echo "  KNOWN_GAP: SMS-041 trace ID not yet in throw messages (GAP-MSG-041)"
-  echo "    Guards exist (fail-closed behavior works) but throw messages use"
-  echo "    generic 'network-renderer-wireguard:' prefix instead of full"
-  echo "    FS-470-HDS-010-SDS-010-SMS-041 trace ID per SMS requirement."
+  echo "  FAIL: SMS-041 trace ID missing from production throw/assertion messages"
+  all_checks_passed=false
 fi
+echo ""
+
+# ================================================================
+# Check 9: Active missing-field diagnostics carry SMS-041 trace ID
+# ================================================================
+echo "--- Check 9: active missing-field SMS-041 diagnostics ---"
+expect_eval_failure \
+  "missingProfileModeResult" \
+  "FS-470-HDS-010-SDS-010-SMS-041: network-renderer-wireguard provider contract missing profile.mode"
+expect_json_message \
+  "generatedPeerMissingPrivateKeyErrors" \
+  "FS-470-HDS-010-SDS-010-SMS-041: network-renderer-wireguard generated-peer mode requires profile.generatedPeer.privateKeyFile"
+expect_json_message \
+  "generatedPeerMissingEndpointErrors" \
+  "FS-470-HDS-010-SDS-010-SMS-041: network-renderer-wireguard generated-peer peers require endpoint"
+expect_json_message \
+  "healthCheckMissingTargetErrors" \
+  "FS-470-HDS-010-SDS-010-SMS-041: health check target required by CPM provider contract"
+expect_json_message \
+  "firewallMissingActionErrors" \
+  "FS-470-HDS-010-SDS-010-SMS-041: firewall rule action required by CPM provider contract, cannot default to allow or deny"
 echo ""
 
 # ================================================================
@@ -468,10 +510,11 @@ echo "  Check 4 (or \"allow\"/\"deny\"):    ${firewall_violations} new violation
 echo "  Check 5 (profile inference):    ${profilemode_violations} new violation(s)"
 echo "  Check 6 (default key path):     ${keypath_violations} new violation(s)"
 echo "  Check 7 (fail-closed guards):   ${failclosed_ok} confirmed, ${failclosed_missing} unverified"
-echo "  Check 8 (SMS-041 trace ID):     $(if [[ ${traceid_hits} -gt 0 ]]; then echo "${traceid_hits} file(s)"; else echo "GAP-MSG-041 (known)"; fi)"
+echo "  Check 8 (SMS-041 trace ID):     $(if [[ ${traceid_hits} -gt 0 ]]; then echo "${traceid_hits} file(s)"; else echo "missing"; fi)"
+echo "  Check 9 (active diagnostics):   profile/key/endpoint/health/firewall"
 echo "  Seeded negatives:              SN1 (wg-egress), SN2 (1.1.1.1), SN3 (300), SN4 (allow)"
 echo "  Total new violations:          ${total_new_violations}"
-echo "  KNOWN_GAPS:                    ${#KNOWN_GAPS[@]} (GAP-MSG-041: throw message trace ID)"
+echo "  KNOWN_GAPS:                    0"
 echo ""
 
 if [[ "${total_new_violations}" -gt 0 ]]; then
@@ -482,8 +525,7 @@ fi
 if [[ "${all_checks_passed}" == "true" ]]; then
   echo "PASS: FS-470-HDS-010-SDS-010-SMS-041 — WG renderer fail-closed specific defaults."
   echo "  All 5 forbidden defaults absent. Fail-closed guards confirmed."
-  echo "  4 active seeded negatives verified (detect + recovery)."
-  echo "  1 KNOWN_GAP: GAP-MSG-041 (throw messages lack SMS-041 trace ID)."
+  echo "  4 scanner seeded negatives and active missing-field diagnostics verified."
   exit 0
 else
   echo "FAIL: Scanner verification or new violations detected."
