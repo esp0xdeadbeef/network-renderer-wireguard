@@ -111,6 +111,13 @@
                 )
                 wgNodes;
 
+              secretPathOrNull =
+                path:
+                if builtins.isString path && lib.hasPrefix "/run/secrets/" path then
+                  path
+                else
+                  null;
+
               nodeConfigs = map
                 (node:
                   let
@@ -130,10 +137,17 @@
                         throw "network-renderer-wireguard: inventory overlay ${node.overlayName} wireguard data requires explicit privateKeyFile";
                     listenPort = wgData.listenPort or null;
                     netdevName = "40-${wgIface}";
+                    secretPaths = lib.unique (
+                      builtins.filter (path: path != null) (
+                        [ (secretPathOrNull privateKeyFile) ]
+                        ++ map (peer: secretPathOrNull (peer.presharedKeyFile or null)) peers
+                      )
+                    );
                   in
                   {
                     container = node.nodeName;
                     overlayName = node.overlayName;
+                    inherit secretPaths;
                     config = {
                       boot.kernelModules = [ "wireguard" ];
 
@@ -252,7 +266,7 @@
                   inherit wgInventory pkgs lib;
                 };
 
-                grouped = lib.foldl
+                groupedConfigs = lib.foldl
                   (acc: { container, config, ... }:
                     acc // {
                       ${container} = (acc.${container} or [ ]) ++ [ config ];
@@ -260,13 +274,36 @@
                   )
                   { }
                   nodeConfigs;
+
+                groupedSecretPaths = lib.foldl
+                  (acc: { container, secretPaths ? [ ], ... }:
+                    acc // {
+                      ${container} = lib.unique ((acc.${container} or [ ]) ++ secretPaths);
+                    }
+                  )
+                  { }
+                  nodeConfigs;
+
+                secretBindMounts =
+                  paths:
+                  builtins.listToAttrs (map
+                    (path: {
+                      name = path;
+                      value = {
+                        hostPath = path;
+                        isReadOnly = true;
+                      };
+                    })
+                    paths);
               in
               lib.mkIf (nodeConfigs != [ ]) {
                 containers = lib.mapAttrs
                   (containerName: cfgs: {
                     config = lib.mkMerge cfgs;
+                  } // lib.optionalAttrs ((groupedSecretPaths.${containerName} or [ ]) != [ ]) {
+                    bindMounts = secretBindMounts groupedSecretPaths.${containerName};
                   })
-                  grouped;
+                  groupedConfigs;
               };
 
             buildWireGuardProviderRenderResult =
