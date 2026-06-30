@@ -114,6 +114,12 @@ in
     };
 
     systemd.network.enable = true;
+    systemd.network.netdevs."10-${lanInterface}" = lib.mkIf ownNetworkStack {
+      netdevConfig = {
+        Kind = "dummy";
+        Name = lanInterface;
+      };
+    };
     systemd.network.networks."20-${lanInterface}" = {
       matchConfig.Name = lanInterface;
       networkConfig = {
@@ -150,7 +156,10 @@ in
     systemd.services.kea-dhcp4 = lib.mkIf dhcp4Enable {
       wantedBy = [ "multi-user.target" ];
       requires = [ "wireguard-provider-ready.target" ];
-      after = [ "wireguard-provider-ready.target" ];
+      after = [
+        "systemd-networkd.service"
+        "wireguard-provider-ready.target"
+      ];
       serviceConfig = {
         ExecStart = "${pkgs.kea}/bin/kea-dhcp4 -c /etc/kea/kea-dhcp4.conf";
         Restart = "on-failure";
@@ -167,7 +176,10 @@ in
     systemd.services.radvd = lib.mkIf raEnable {
       wantedBy = [ "multi-user.target" ];
       requires = [ "wireguard-provider-ready.target" ];
-      after = [ "wireguard-provider-ready.target" ];
+      after = [
+        "systemd-networkd.service"
+        "wireguard-provider-ready.target"
+      ];
       serviceConfig = {
         ExecStart = "${pkgs.radvd}/bin/radvd -n -C /etc/radvd.conf ${lanInterface}";
         Restart = "on-failure";
