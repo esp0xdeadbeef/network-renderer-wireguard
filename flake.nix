@@ -57,11 +57,13 @@
             {
               controlPlane,
               wgInventory,
+              providerRuntimeModuleFor,
               pkgs,
               lib,
             }:
             let
               cpmData = controlPlane.data or { };
+              wireguardProviderContracts = controlPlane.providerContracts.wireguard or { };
               wgNodes = lib.concatLists (
                 lib.mapAttrsToList
                   (_enterprise: enterpriseData:
@@ -122,10 +124,24 @@
                 else
                   null;
 
+              providerContractSecretPaths =
+                providerContract:
+                let
+                  generatedPeer = providerContract.profile.generatedPeer or { };
+                  generatedPeers =
+                    if builtins.isList (generatedPeer.peers or null) then
+                      generatedPeer.peers
+                    else
+                      [ ];
+                in
+                [ (secretPathOrNull (generatedPeer.privateKeyFile or null)) ]
+                ++ map (peer: secretPathOrNull (peer.presharedKeyFile or null)) generatedPeers;
+
               nodeConfigs = map
                 (node:
                   let
                     wgData = wgInventory.${node.overlayName} or { };
+                    providerContract = wireguardProviderContracts.${node.overlayName} or null;
                     peers =
                       if wgData ? peers && builtins.isList wgData.peers && wgData.peers != [ ] then
                         wgData.peers
@@ -153,14 +169,10 @@
                       builtins.filter (path: path != null) (
                         [ (secretPathOrNull privateKeyFile) ]
                         ++ map (peer: secretPathOrNull (peer.presharedKeyFile or null)) peers
+                        ++ lib.optionals (providerContract != null) (providerContractSecretPaths providerContract)
                       )
                     );
-                  in
-                  {
-                    container = node.nodeName;
-                    overlayName = node.overlayName;
-                    inherit secretPaths;
-                    config = {
+                    wireguardNetdevConfig = {
                       boot.kernelModules = [ "wireguard" ];
 
                       environment.systemPackages = [ pkgs.wireguard-tools ];
@@ -258,6 +270,17 @@
                         };
                       };
                     };
+                    providerRuntimeConfig = providerRuntimeModuleFor providerContract;
+                  in
+                  {
+                    container = node.nodeName;
+                    overlayName = node.overlayName;
+                    inherit secretPaths;
+                    config =
+                      if providerContract == null then
+                        wireguardNetdevConfig
+                      else
+                        providerRuntimeConfig;
                   }
                 )
                 wgNodesWithWgData;
@@ -279,6 +302,7 @@
                 wgInventory = rendererInput.controlPlane.wgInventory or { };
                 nodeConfigs = buildWireGuardNodeConfigs {
                   controlPlane = rendererInput.controlPlane;
+                  providerRuntimeModuleFor = buildWireGuardProviderRuntimeModule;
                   inherit wgInventory pkgs lib;
                 };
 
@@ -315,7 +339,7 @@
               lib.mkIf (nodeConfigs != [ ]) {
                 containers = lib.mapAttrs
                   (containerName: cfgs: {
-                    config = lib.mkMerge cfgs;
+                    config.imports = cfgs;
                   } // lib.optionalAttrs ((groupedSecretPaths.${containerName} or [ ]) != [ ]) {
                     bindMounts = secretBindMounts groupedSecretPaths.${containerName};
                   })

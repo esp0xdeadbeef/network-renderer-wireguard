@@ -11,6 +11,7 @@ fi
 bash tests/test-provider-runtime-contract.sh
 bash tests/test-fs100-renderer-output-provenance.sh
 bash tests/test-fs470-wireguard-remote-egress-smt.sh
+bash tests/test-fs470-hostmodule-provider-runtime.sh
 bash tests/test-s88-code-traceability.sh
 bash tests/test-fs470-boundary-scan.sh
 bash tests/test-fs470-hds010-sds010-sms021-wg-cpm-only-consumption.sh
