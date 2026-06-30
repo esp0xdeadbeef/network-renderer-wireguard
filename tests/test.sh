@@ -14,6 +14,7 @@ bash tests/test-fs470-wireguard-remote-egress-smt.sh
 bash tests/test-s88-code-traceability.sh
 bash tests/test-fs470-boundary-scan.sh
 bash tests/test-fs470-hds010-sds010-sms021-wg-cpm-only-consumption.sh
+bash tests/test-fs470-hds010-sds010-sms021-wg-secret-bindmounts.sh
 bash tests/test-fs470-hds010-sds010-sms041-wg-fail-closed-specific.sh
 bash tests/FS-470-HDS-010-SDS-010-SMS-050.sh
 bash tests/FS-470-HDS-010-SDS-010-SMS-060.sh
