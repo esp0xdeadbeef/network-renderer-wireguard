@@ -26,26 +26,9 @@ echo "--- FS-470-HDS-010-SDS-010-SMS-070: WG Output Containment ---"
 echo ""
 
 # ================================================================
-# KNOWN_GAPS: pre-existing hits in WG-owned files (legitimate code)
+# Expected scoped hits in WG-owned files.
 # ================================================================
-KNOWN_GAPS=(
-  # GAP-OC-001: IP forwarding in modules/wireguard-provider-runtime.nix
-  # is scoped to WG container configs — WG-owned, not a leak.
-  # GAP-OC-002: nftables tables in s88/ControlModule/firewall-nat.nix
-  # use WG-provenance table names — WG-owned, not a leak.
-)
-
-is_known_gap() {
-  local file="$1"
-  local line="$2"
-  local key="${file}:${line}"
-  for gap in "${KNOWN_GAPS[@]}"; do
-    if [[ "${gap}" == "${key}"* ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
+wg_runtime_module="modules/wireguard-provider-runtime.nix"
 
 # ================================================================
 # Check 1: WG nftables rules use WG-specific table names
@@ -56,7 +39,7 @@ table_issues=0
 
 for dir in "${src_dirs[@]}"; do
   hits=$(find "${repo_root}/${dir}" -name '*.nix' -print0 2>/dev/null | \
-    xargs -0 grep -nE 'table\s+(inet|ip|ip6)\s+' 2>/dev/null | \
+    xargs -0 grep -HnE 'table\s+(inet|ip|ip6)\s+' 2>/dev/null | \
     grep -vE '^\s*(#|//)' || true)
   if [[ -n "${hits}" ]]; then
     while IFS= read -r hit_line; do
@@ -91,7 +74,7 @@ concept_violations=0
 # but seeded negative tests non-WG context)
 for dir in "${src_dirs[@]}"; do
   hits=$(find "${repo_root}/${dir}" -name '*.nix' -print0 2>/dev/null | \
-    xargs -0 grep -nE '(wg0|wireguard.*interface|wg-egress|wgIface)' 2>/dev/null | \
+    xargs -0 grep -HnE '(wg0|wireguard.*interface|wg-egress|wgIface)' 2>/dev/null | \
     grep -vE '^\s*(#|//)' || true)
   if [[ -n "${hits}" ]]; then
     count=$(echo "${hits}" | wc -l)
@@ -107,10 +90,11 @@ echo ""
 # ================================================================
 echo "--- Check 3: IP forwarding provenance ---"
 fwd_ok=0
+fwd_issues=0
 
 for dir in "${src_dirs[@]}"; do
   hits=$(find "${repo_root}/${dir}" -name '*.nix' -print0 2>/dev/null | \
-    xargs -0 grep -nE '(net\.ipv[46]\.(conf\.all\.forwarding|ip_forward)|net\.ipv[46]\.conf\.default\.forwarding)' 2>/dev/null | \
+    xargs -0 grep -HnE '(net\.ipv[46]\.(conf\.all\.forwarding|ip_forward)|net\.ipv[46]\.conf\.default\.forwarding)' 2>/dev/null | \
     grep -vE '^\s*(#|//)' || true)
   if [[ -n "${hits}" ]]; then
     while IFS= read -r hit_line; do
@@ -119,13 +103,20 @@ for dir in "${src_dirs[@]}"; do
       rest="${hit_line#*:}"
       lineno="${rest%%:*}"
       rel_path="${file_path#${repo_root}/}"
-      # All hits are in WG NixOS module (container scope) = KNOWN_GAP
-      echo "  KNOWN_GAP: ${rel_path}:${lineno} — GAP-OC-001: IP forwarding in WG container config"
+      if [[ "${rel_path}" == "${wg_runtime_module}" ]]; then
+        echo "  OK: ${rel_path}:${lineno} — IP forwarding scoped to WG provider runtime module"
+        fwd_ok=$((fwd_ok + 1))
+      else
+        echo "  ISSUE: ${rel_path}:${lineno} — IP forwarding outside WG provider runtime module"
+        fwd_issues=$((fwd_issues + 1))
+        all_checks_passed=false
+      fi
     done <<< "${hits}"
   fi
 done
 
-echo "  IP forwarding: GAP-OC-001 tracked (WG container scope)"
+echo "  IP forwarding in WG runtime module: ${fwd_ok}"
+echo "  IP forwarding outside WG runtime module: ${fwd_issues}"
 echo ""
 
 # ================================================================
@@ -137,7 +128,7 @@ path_issues=0
 
 for dir in "${src_dirs[@]}"; do
   hits=$(find "${repo_root}/${dir}" -name '*.nix' -print0 2>/dev/null | \
-    xargs -0 grep -nE '(outPath|builtins\.toFile|writeText|writeFile)' 2>/dev/null | \
+    xargs -0 grep -HnE '(outPath|builtins\.toFile|writeText|writeFile)' 2>/dev/null | \
     grep -vE '^\s*(#|//)' || true)
   if [[ -n "${hits}" ]]; then
     while IFS= read -r hit_line; do
@@ -227,6 +218,38 @@ rm -f "${sn2_dir}/bad-nft.nix"
 echo ""
 
 # ================================================================
+# Seeded Negative 3: Inject forwarding sysctl outside WG module
+# ================================================================
+echo "--- Seeded Negative 3: Inject forwarding sysctl in non-WG module ---"
+sn3_dir="${tmp_dir}/sn3"
+mkdir -p "${sn3_dir}"
+cat > "${sn3_dir}/bad-forwarding.nix" << 'SN3EOF'
+{ config, lib, ... }:
+{
+  # VIOLATION: generic host forwarding outside WG provider runtime module
+  boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
+}
+SN3EOF
+
+sn3_hits=$(grep -nE 'net\.ipv[46]\.(conf\.all\.forwarding|ip_forward)' "${sn3_dir}/bad-forwarding.nix" 2>/dev/null || true)
+if [[ -n "${sn3_hits}" ]]; then
+  echo "  PASS: Seeded negative 3 caught — scanner detects forwarding outside WG module"
+else
+  echo "  FAIL: Seeded negative 3 missed — scanner did not detect forwarding sysctl"
+  all_checks_passed=false
+fi
+
+rm -f "${sn3_dir}/bad-forwarding.nix"
+sn3_clean=$(grep -rnE 'net\.ipv[46]\.(conf\.all\.forwarding|ip_forward)' "${sn3_dir}" 2>/dev/null || true)
+if [[ -z "${sn3_clean}" ]]; then
+  echo "  PASS: Seeded negative 3 recovery — clean after removal"
+else
+  echo "  FAIL: Seeded negative 3 recovery — residual violations"
+  all_checks_passed=false
+fi
+echo ""
+
+# ================================================================
 # Final report
 # ================================================================
 echo "============================================================"
@@ -234,16 +257,15 @@ echo "FS-470-HDS-010-SDS-010-SMS-070 Output Containment Summary"
 echo "============================================================"
 echo "  Check 1 (table provenance):  ${table_ok} WG-tagged, ${table_issues} untagged"
 echo "  Check 2 (WG concepts):       ${concept_violations} in non-WG surfaces"
-echo "  Check 3 (IP forwarding):     GAP-OC-001 (WG container scope)"
+echo "  Check 3 (IP forwarding):     ${fwd_ok} WG-scoped, ${fwd_issues} out of scope"
 echo "  Check 4 (output paths):      ${path_ok} WG-namespaced, ${path_issues} other"
-echo "  Seeded negatives:             SN1 (WG iface in non-WG routing), SN2 (non-WG nftables)"
-echo "  KNOWN_GAPS:                   GAP-OC-001"
+echo "  Seeded negatives:             SN1 (WG iface in non-WG routing), SN2 (non-WG nftables), SN3 (forwarding outside WG module)"
+echo "  KNOWN_GAPS:                   0"
 echo ""
 
 if [[ "${all_checks_passed}" == "true" ]]; then
   echo "PASS: FS-470-HDS-010-SDS-010-SMS-070 — WG renderer output contained in WG-owned artifacts."
-  echo "  2 active seeded negatives verified."
-  echo "  GAP-OC-001: IP forwarding in WG container config (container scope)."
+  echo "  3 active seeded negatives verified."
   exit 0
 else
   echo "FAIL: FS-470-HDS-010-SDS-010-SMS-070 — scanner verification failed."
