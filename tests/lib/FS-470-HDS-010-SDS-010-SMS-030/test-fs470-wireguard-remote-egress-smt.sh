@@ -1,0 +1,1 @@
+../shared/test-fs470-wireguard-remote-egress-smt.sh
