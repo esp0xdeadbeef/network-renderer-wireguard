@@ -12,7 +12,7 @@
 # GAMP-ID: FS-470-HDS-010-SDS-010-SMS-080
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="${SMS_TEST_REPO_ROOT:-$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)}"
 cd "${repo_root}"
 
 fail() {

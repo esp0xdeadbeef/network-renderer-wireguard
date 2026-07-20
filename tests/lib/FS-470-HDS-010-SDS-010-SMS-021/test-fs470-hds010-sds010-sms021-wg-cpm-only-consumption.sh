@@ -16,7 +16,7 @@
 # Test PASSES with existing gaps; FAILS only on NEW violations.
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="${SMS_TEST_REPO_ROOT:-$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)}"
 cd "${repo_root}"
 
 tmp_dir="$(mktemp -d)"
