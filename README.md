@@ -5,15 +5,15 @@ material from explicit provider contracts.
 
 It is a provider renderer, not a forwarding model.
 
-Pipeline position: this repository is downstream of
-`network-control-plane-model` provider contracts and upstream of runtime
-consumers such as NixOS modules or lab orchestration.
+Pipeline position: this repository is downstream of the validated canonical
+bundle emitted by `network-realization-model` and upstream of runtime consumers
+such as NixOS modules or lab orchestration.
 
 Migration, deviation, exception, transition, or temporary compatibility behavior
 must be explicit in the README, tests, and owning layer before it is accepted.
 
 ```text
-network-forwarding-model -> network-control-plane-model -> network-renderer-wireguard
+network-control-plane-model -> network-realization-model -> network-renderer-wireguard
 ```
 
 ## Spec Chain
@@ -43,10 +43,15 @@ All behavior requirements originate from the FS-470 spec chain.
 ### Pipeline
 
 ```
-network-labs (intent + inventory) → network-compiler → NFM → CPM → network-renderer-wireguard
+network-labs (intent + inventory) → compiler → NFM → CPM → realization → network-renderer-wireguard
 ```
 
-Required inputs: Explicit CPM provider-neutral output (overlay runtime data, provider contracts). Per FS-983, the renderer consumes data through CPM output — it does not parse raw `intent.nix`, `inventory.nix`, or provider profile files for network meaning.
+Required semantic input: one schema-validated canonical bundle containing the
+CPM-derived provider-neutral output, including overlay runtime data and provider
+contracts. An optional normalized platform-binding bundle may carry multiple
+binding categories under one identity and schema. Per FS-983 and FS-166, the
+renderer does not parse raw intent, inventory, unvalidated CPM output, or
+provider profile files for network meaning.
 
 ### SMS-010 Key Requirements
 
@@ -60,9 +65,10 @@ Construction tests: `network-renderer-wireguard/tests/`
 
 ## Contract
 
-- The forwarding model and CPM/provider contract are the source of truth.
-- This renderer consumes explicit provider runtime contracts and emits NixOS
-  module material.
+- The forwarding model and CPM/provider contract are the semantic source of
+  truth; realization provides the only accepted renderer boundary.
+- This renderer consumes explicit provider runtime contracts from a validated
+  canonical bundle and emits NixOS module material.
 - Missing, partial, or inconsistent provider input must fail evaluation through
   visible assertions or missing-field errors.
 - Renderer output must be deterministic for the same provider contract.
@@ -94,11 +100,32 @@ The flake exports:
 - `nixosModules.wireguard-provider-runtime`
 - `libBySystem.<system>.renderer.buildWireGuardProviderRenderResult`
 - `libBySystem.<system>.renderer.buildWireGuardProviderRuntimeModule`
-- `libBySystem.<system>.renderer.hostModule` — CPM-only NixOS module generator (wgInventory extracted from CPM model internally)
+- `libBySystem.<system>.renderer.canonical.validateInput`
+- `libBySystem.<system>.renderer.canonical.hostModule` — active canonical
+  NixOS module entry point
+- `libBySystem.<system>.renderer.hostModule` — stale direct-CPM entry retained
+  only while existing callers migrate
 
-### hostModule (FS-470-HDS-010-SDS-010-SMS-021)
+### canonical.hostModule
 
-Accepts ONLY pre-compiled CPM output. `wgInventory` and optional
+The active renderer entry accepts one validated canonical bundle and optionally
+one validated platform-binding bundle. The binding bundle may contain interface,
+deployment, secret-delivery, lifecycle, and backend bindings, but those
+categories share one bundle identity and schema. The realization boundary
+rejects raw CPM input and mismatched bundle, target, scope, or release identity
+before WireGuard projection starts.
+
+```nix
+inputs.network-renderer-wireguard.libBySystem.${system}.renderer.canonical.hostModule {
+  bundle = canonicalBundle;
+  platformBinding = wireguardPlatformBinding; # optional validated bundle
+  hostName = "router-host";
+}
+```
+
+### Legacy hostModule (stale/superseded)
+
+The retained migration entry accepts pre-compiled CPM output. `wgInventory` and optional
 `providerContracts.wireguard` entries are extracted from the CPM model
 internally — no separate parameter, no path-based API:
 
