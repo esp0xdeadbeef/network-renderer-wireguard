@@ -73,7 +73,7 @@ in
 
     system.stateVersion = lib.mkDefault "25.11";
 
-    services.resolved.enable = lib.mkIf ownNetworkStack false;
+    services.resolved.enable = false;
     systemd.services.systemd-networkd-wait-online.enable = lib.mkIf ownNetworkStack (lib.mkForce false);
     systemd.services.resolvconf.enable = lib.mkForce false;
 
@@ -87,8 +87,8 @@ in
 
     networking = {
       useNetworkd = true;
-      useDHCP = lib.mkIf ownNetworkStack (lib.mkForce false);
-      useHostResolvConf = lib.mkIf ownNetworkStack (lib.mkForce false);
+      useDHCP = lib.mkForce false;
+      useHostResolvConf = lib.mkForce false;
       firewall.enable = lib.mkIf (firewallMode == "dedicated-gateway") false;
 
       networkmanager = {
