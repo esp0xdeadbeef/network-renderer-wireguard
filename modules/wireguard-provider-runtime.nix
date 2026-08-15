@@ -73,18 +73,16 @@ in
 
     system.stateVersion = lib.mkDefault "25.11";
 
-    services.resolved.enable = lib.mkIf (!ownNetworkStack) true;
-    systemd.services.systemd-networkd-wait-online.enable = lib.mkIf ownNetworkStack (lib.mkForce false);
-    systemd.services.resolvconf.enable = lib.mkForce false;
+    services.resolved.enable = false;
+    systemd.services.systemd-networkd-wait-online.enable = lib.mkForce false;
+    systemd.services.resolvconf.enable = false;
 
     systemd.tmpfiles.rules = [
+      "L+ /etc/resolv.conf - - - - /run/NetworkManager/resolv.conf"
       "d /run/kea 0755 root root -"
       "d /var/lib/kea 0755 root root -"
       "d /etc/kea 0755 root root -"
       "d /etc/radvd 0755 root root -"
-    ]
-    ++ lib.optionals ownNetworkStack [
-      "L+ /etc/resolv.conf - - - - /run/NetworkManager/resolv.conf"
     ];
 
     networking = {
@@ -95,9 +93,10 @@ in
 
       networkmanager = {
         enable = true;
-        dns = if ownNetworkStack then providerState.get [ "networkManager" "dns" ] dnsMode else "systemd-resolved";
-        unmanaged = lib.optionals ownNetworkStack [ "interface-name:${lanInterface}" ]
-          ++ lib.optionals (!ownNetworkStack) [ "except:type:wireguard" ];
+        dns = "default";
+        unmanaged = [
+          "interface-name:${lanInterface}"
+        ];
       };
 
       nftables = {
@@ -133,7 +132,7 @@ in
       routes = returnRoutesForLan;
     };
 
-    environment.etc."NetworkManager/system-connections/${wanInterface}.nmconnection" = lib.mkIf ownNetworkStack {
+    environment.etc."NetworkManager/system-connections/${wanInterface}.nmconnection" = {
       mode = "0600";
       text = wanConnectionText;
     };
