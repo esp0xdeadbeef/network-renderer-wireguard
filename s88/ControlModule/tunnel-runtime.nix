@@ -61,7 +61,6 @@ in
 
       [ipv4]
       method=${state.wanIPv4Method}
-      dns-priority=-10
       ${lib.optionalString (state.wanIPv4RouteMetric != null) "route-metric=${state.wanIPv4RouteMetric}"}
 
       [ipv6]

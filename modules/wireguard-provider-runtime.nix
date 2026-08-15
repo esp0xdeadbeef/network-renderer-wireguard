@@ -122,7 +122,7 @@ in
         Name = lanInterface;
       };
     };
-    systemd.network.networks."20-${lanInterface}" = {
+    systemd.network.networks."20-${lanInterface}" = lib.mkIf ownNetworkStack {
       matchConfig.Name = lanInterface;
       networkConfig = {
         Address = lanAddresses;
@@ -132,7 +132,7 @@ in
       routes = returnRoutesForLan;
     };
 
-    environment.etc."NetworkManager/system-connections/${wanInterface}.nmconnection" = {
+    environment.etc."NetworkManager/system-connections/${wanInterface}.nmconnection" = lib.mkIf ownNetworkStack {
       mode = "0600";
       text = wanConnectionText;
     };
