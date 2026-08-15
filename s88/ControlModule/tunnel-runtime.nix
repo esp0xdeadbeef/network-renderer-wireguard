@@ -18,7 +18,12 @@ let
               (line "")
               (line "[Peer]")
               (line "PublicKey = ${peer.publicKey}")
-              (line "Endpoint = ${peer.endpoint}")
+              (
+                if peer.endpointFile != null then
+                  ''printf 'Endpoint = %s\n' "$(cat ${lib.escapeShellArg peer.endpointFile})" >> "$CONF"''
+                else
+                  line "Endpoint = ${peer.endpoint}"
+              )
               (line "AllowedIPs = ${lib.concatStringsSep ", " peer.allowedIPs}")
             ]
             ++ lib.optional (peer.presharedKeyFile != null) ''
