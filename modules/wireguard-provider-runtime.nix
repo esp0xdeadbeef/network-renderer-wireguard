@@ -90,7 +90,7 @@ in
       firewall.enable = lib.mkIf (firewallMode == "dedicated-gateway") false;
 
       networkmanager = {
-        enable = true;
+        enable = lib.mkForce true;
         dns = providerState.get [ "networkManager" "dns" ] dnsMode;
         unmanaged = [
           "interface-name:${lanInterface}"
