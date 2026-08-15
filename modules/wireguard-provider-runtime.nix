@@ -73,7 +73,7 @@ in
 
     system.stateVersion = lib.mkDefault "25.11";
 
-    services.resolved.enable = lib.mkForce (!ownNetworkStack);
+    services.resolved.enable = lib.mkIf (!ownNetworkStack) true;
     systemd.services.systemd-networkd-wait-online.enable = lib.mkIf ownNetworkStack (lib.mkForce false);
     systemd.services.resolvconf.enable = lib.mkForce false;
 
@@ -94,7 +94,7 @@ in
       firewall.enable = lib.mkIf (firewallMode == "dedicated-gateway") false;
 
       networkmanager = {
-        enable = lib.mkForce true;
+        enable = true;
         dns = if ownNetworkStack then providerState.get [ "networkManager" "dns" ] dnsMode else "systemd-resolved";
         unmanaged = lib.optionals ownNetworkStack [ "interface-name:${lanInterface}" ]
           ++ lib.optionals (!ownNetworkStack) [ "except:type:wireguard" ];
