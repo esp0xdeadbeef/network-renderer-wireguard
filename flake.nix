@@ -109,13 +109,15 @@
                   wgData = wgInventory.${node.overlayName} or { };
                   providerContract =
                     wireguardProviderContracts.${node.overlayName} or null;
-                  peers = if wgData ? peers && builtins.isList wgData.peers
+                  peers = if providerContract != null then [ ] else if wgData ? peers && builtins.isList wgData.peers
                   && wgData.peers != [ ] then
                     wgData.peers
                   else
                     throw (sms022Diagnostic
                       "WireGuard peers required by CPM-preserved wgInventory for inventory overlay ${node.overlayName}");
-                  wgIface = if wgData ? interface
+                  wgIface = if providerContract != null then
+                    (providerContract.interfaces.vpn or "wg0")
+                  else if wgData ? interface
                   && builtins.isString wgData.interface && wgData.interface
                   != "" then
                     if builtins.stringLength wgData.interface <= 15 then
@@ -126,14 +128,18 @@
                   else
                     throw (sms022Diagnostic ''
                       WireGuard interface name required by CPM-preserved wgInventory, cannot default to "wg-egress" for inventory overlay ${node.overlayName}'');
-                  privateKeyFile = if wgData ? privateKeyFile
+                  privateKeyFile = if providerContract != null then
+                    ""
+                  else if wgData ? privateKeyFile
                   && builtins.isString wgData.privateKeyFile
                   && wgData.privateKeyFile != "" then
                     wgData.privateKeyFile
                   else
                     throw (sms022Diagnostic
                       "WireGuard private key path required by CPM-preserved wgInventory for inventory overlay ${node.overlayName}, cannot construct a default private key path");
-                  listenPort = if wgData ? listenPort
+                  listenPort = if providerContract != null then
+                    null
+                  else if wgData ? listenPort
                   && builtins.isInt wgData.listenPort then
                     wgData.listenPort
                   else
