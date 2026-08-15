@@ -108,9 +108,9 @@ in
 
     boot.kernelModules = lib.optional nat66Enable "ip6table_nat";
     boot.kernel.sysctl = {
-      "net.ipv4.ip_forward" = 1;
-      "net.ipv4.tcp_l3mdev_accept" = 1;
-      "net.ipv6.conf.all.forwarding" = 1;
+      "net.ipv4.ip_forward" = lib.mkDefault 1;
+      "net.ipv4.tcp_l3mdev_accept" = lib.mkDefault 1;
+      "net.ipv6.conf.all.forwarding" = lib.mkDefault 1;
     };
 
     systemd.network.enable = true;
