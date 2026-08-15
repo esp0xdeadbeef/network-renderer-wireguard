@@ -73,16 +73,18 @@ in
 
     system.stateVersion = lib.mkDefault "25.11";
 
-    services.resolved.enable = false;
+    services.resolved.enable = lib.mkForce (!ownNetworkStack);
     systemd.services.systemd-networkd-wait-online.enable = lib.mkIf ownNetworkStack (lib.mkForce false);
     systemd.services.resolvconf.enable = lib.mkForce false;
 
     systemd.tmpfiles.rules = [
-      "L+ /etc/resolv.conf - - - - /run/NetworkManager/resolv.conf"
       "d /run/kea 0755 root root -"
       "d /var/lib/kea 0755 root root -"
       "d /etc/kea 0755 root root -"
       "d /etc/radvd 0755 root root -"
+    ]
+    ++ lib.optionals ownNetworkStack [
+      "L+ /etc/resolv.conf - - - - /run/NetworkManager/resolv.conf"
     ];
 
     networking = {
@@ -93,10 +95,9 @@ in
 
       networkmanager = {
         enable = lib.mkForce true;
-        dns = providerState.get [ "networkManager" "dns" ] dnsMode;
-        unmanaged = [
-          "interface-name:${lanInterface}"
-        ];
+        dns = if ownNetworkStack then providerState.get [ "networkManager" "dns" ] dnsMode else "systemd-resolved";
+        unmanaged = lib.mkIf ownNetworkStack [ "interface-name:${lanInterface}" ]
+          ++ lib.mkIf (!ownNetworkStack) [ "except:type:wireguard" ];
       };
 
       nftables = {
