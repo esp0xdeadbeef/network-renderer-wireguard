@@ -96,8 +96,8 @@ in
       networkmanager = {
         enable = lib.mkForce true;
         dns = if ownNetworkStack then providerState.get [ "networkManager" "dns" ] dnsMode else "systemd-resolved";
-        unmanaged = lib.mkIf ownNetworkStack [ "interface-name:${lanInterface}" ]
-          ++ lib.mkIf (!ownNetworkStack) [ "except:type:wireguard" ];
+        unmanaged = lib.optionals ownNetworkStack [ "interface-name:${lanInterface}" ]
+          ++ lib.optionals (!ownNetworkStack) [ "except:type:wireguard" ];
       };
 
       nftables = {
