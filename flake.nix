@@ -101,6 +101,8 @@
                     else
                       [ ];
                 in [ (secretPathOrNull (generatedPeer.privateKeyFile or null)) ]
+                ++ map (peer: secretPathOrNull (peer.endpointFile or null))
+                generatedPeers
                 ++ map (peer: secretPathOrNull (peer.presharedKeyFile or null))
                 generatedPeers;
 
