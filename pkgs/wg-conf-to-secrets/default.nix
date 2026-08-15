@@ -35,12 +35,9 @@ pkgs.writeShellApplication {
           if (key == "PrivateKey") key = "privateKey"
           else if (key == "Address") key = "address"
           else if (key == "DNS") key = "dns"
-          else if (key == "MTU") key = "mtu"
           else if (key == "PublicKey") key = "publicKey"
           else if (key == "Endpoint") key = "endpoint"
-          else if (key == "AllowedIPs") key = "allowedIPs"
           else if (key == "PresharedKey") key = "presharedKey"
-          else if (key == "PersistentKeepalive") key = "persistentKeepalive"
           else next
           printf "%s\t%s\n", key, val
         }

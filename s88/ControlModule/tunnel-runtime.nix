@@ -8,8 +8,16 @@ let
     lib.optionalString (state.profileMode == "generated-peer") (
       let
         generated = state.generatedPeerForScript;
-        addressLines = lib.concatMapStringsSep "\n" (address: line "Address = ${address}") generated.addresses;
-        dnsLines = optionalLine (generated.dns != [ ]) "DNS = ${lib.concatStringsSep ", " generated.dns}";
+        addressLines =
+          if generated.addressesFile != null then
+            ''printf 'Address = %s\n' "$(cat ${lib.escapeShellArg generated.addressesFile})" >> "$CONF"''
+          else
+            lib.concatMapStringsSep "\n" (address: line "Address = ${address}") generated.addresses;
+        dnsLines =
+          if generated.dnsFile != null then
+            ''printf 'DNS = %s\n' "$(cat ${lib.escapeShellArg generated.dnsFile})" >> "$CONF"''
+          else
+            optionalLine (generated.dns != [ ]) "DNS = ${lib.concatStringsSep ", " generated.dns}";
         mtuLines = optionalLine (generated.mtu != null) "MTU = ${toString generated.mtu}";
         peerScript =
           peer:
@@ -17,7 +25,12 @@ let
             [
               (line "")
               (line "[Peer]")
-              (line "PublicKey = ${peer.publicKey}")
+              (
+                if peer.publicKeyFile != null then
+                  ''printf 'PublicKey = %s\n' "$(cat ${lib.escapeShellArg peer.publicKeyFile})" >> "$CONF"''
+                else
+                  line "PublicKey = ${peer.publicKey}"
+              )
               (
                 if peer.endpointFile != null then
                   ''printf 'Endpoint = %s\n' "$(cat ${lib.escapeShellArg peer.endpointFile})" >> "$CONF"''

@@ -25,12 +25,9 @@ commands. Instead:
 | `privateKey`        | `[Interface] PrivateKey` | yes |
 | `address`           | `[Interface] Address`    | yes |
 | `dns`               | `[Interface] DNS`        | yes |
-| `mtu`               | `[Interface] MTU`        | no  |
-| `publicKey`         | `[Peer] PublicKey`       | no  |
+| `publicKey`         | `[Peer] PublicKey`       | yes |
 | `endpoint`          | `[Peer] Endpoint`        | yes |
-| `allowedIPs`        | `[Peer] AllowedIPs`      | no  |
 | `presharedKey`      | `[Peer] PresharedKey`    | yes |
-| `persistentKeepalive` | `[Peer] PersistentKeepalive` | no |
 
 The `endpoint` is treated as a secret: it reveals which provider and which
 entry server is in use.

@@ -66,7 +66,9 @@ in
 
       generatedPrivateKeyFile = get [ "profile" "generatedPeer" "privateKeyFile" ] null;
       generatedAddresses = get [ "profile" "generatedPeer" "addresses" ] [ ];
+      generatedAddressesFile = get [ "profile" "generatedPeer" "addressesFile" ] null;
       generatedDns = get [ "profile" "generatedPeer" "dns" ] [ ];
+      generatedDnsFile = get [ "profile" "generatedPeer" "dnsFile" ] null;
       generatedMtu = get [ "profile" "generatedPeer" "mtu" ] null;
       generatedPeers = get [ "profile" "generatedPeer" "peers" ] [ ];
 
@@ -160,10 +162,13 @@ in
           else
             throw (diagnostic "WireGuard private key path required by CPM provider contract, cannot construct a default private key path");
         addresses = generatedAddresses;
+        addressesFile = generatedAddressesFile;
         dns = generatedDns;
+        dnsFile = generatedDnsFile;
         mtu = generatedMtu;
         peers = map (peer: {
           publicKey = peerString peer "publicKey";
+          publicKeyFile = peerString peer "publicKeyFile";
           endpoint = peerString peer "endpoint";
           endpointFile = peerString peer "endpointFile";
           allowedIPs = peerList peer "allowedIPs";
@@ -235,16 +240,16 @@ in
         message = diagnostic "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.privateKeyFile";
       }
       {
-        assertion = state.profileMode != "generated-peer" || state.generatedAddresses != [ ];
-        message = diagnostic "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.addresses";
+        assertion = state.profileMode != "generated-peer" || state.generatedAddresses != [ ] || isNonEmptyString state.generatedAddressesFile;
+        message = diagnostic "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.addresses or addressesFile";
       }
       {
         assertion = state.profileMode != "generated-peer" || state.generatedPeers != [ ];
         message = diagnostic "network-renderer-wireguard generated-peer mode requires profile.generatedPeer.peers";
       }
       {
-        assertion = state.profileMode != "generated-peer" || builtins.all (peer: isNonEmptyString (peerField peer "publicKey")) state.generatedPeers;
-        message = diagnostic "network-renderer-wireguard generated-peer peers require publicKey";
+        assertion = state.profileMode != "generated-peer" || builtins.all (peer: isNonEmptyString (peerField peer "publicKey") || isNonEmptyString (peerField peer "publicKeyFile")) state.generatedPeers;
+        message = diagnostic "network-renderer-wireguard generated-peer peers require publicKey or publicKeyFile";
       }
       {
         assertion = state.profileMode != "generated-peer" || builtins.all (peer: isNonEmptyString (peerField peer "endpoint") || isNonEmptyString (peerField peer "endpointFile")) state.generatedPeers;

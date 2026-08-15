@@ -100,10 +100,16 @@
                       generatedPeer.peers
                     else
                       [ ];
-                in [ (secretPathOrNull (generatedPeer.privateKeyFile or null)) ]
+                in [
+                  (secretPathOrNull (generatedPeer.privateKeyFile or null))
+                  (secretPathOrNull (generatedPeer.addressesFile or null))
+                  (secretPathOrNull (generatedPeer.dnsFile or null))
+                ]
                 ++ map (peer: secretPathOrNull (peer.endpointFile or null))
                 generatedPeers
                 ++ map (peer: secretPathOrNull (peer.presharedKeyFile or null))
+                generatedPeers
+                ++ map (peer: secretPathOrNull (peer.publicKeyFile or null))
                 generatedPeers;
 
               nodeConfigs = map (node:
