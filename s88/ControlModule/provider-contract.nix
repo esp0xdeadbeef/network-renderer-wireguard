@@ -165,6 +165,7 @@ in
         peers = map (peer: {
           publicKey = peerString peer "publicKey";
           endpoint = peerString peer "endpoint";
+          endpointFile = peerString peer "endpointFile";
           allowedIPs = peerList peer "allowedIPs";
           presharedKeyFile = peerField peer "presharedKeyFile";
           persistentKeepalive = peerField peer "persistentKeepalive";
@@ -246,8 +247,8 @@ in
         message = diagnostic "network-renderer-wireguard generated-peer peers require publicKey";
       }
       {
-        assertion = state.profileMode != "generated-peer" || builtins.all (peer: isNonEmptyString (peerField peer "endpoint")) state.generatedPeers;
-        message = diagnostic "network-renderer-wireguard generated-peer peers require endpoint";
+        assertion = state.profileMode != "generated-peer" || builtins.all (peer: isNonEmptyString (peerField peer "endpoint") || isNonEmptyString (peerField peer "endpointFile")) state.generatedPeers;
+        message = diagnostic "network-renderer-wireguard generated-peer peers require endpoint or endpointFile";
       }
       {
         assertion = state.profileMode != "generated-peer" || builtins.all (peer: peerList peer "allowedIPs" != [ ]) state.generatedPeers;
