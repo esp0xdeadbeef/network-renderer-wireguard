@@ -49,11 +49,14 @@
           # Accepts pre-compiled CPM output (controlPlane) and
           # WG overlay data (wgInventory, extracted from CPM model) — satisfies SMS-021.
           buildWireGuardNodeConfigs =
-            { controlPlane, wgInventory, providerRuntimeModuleFor, pkgs, lib, }:
+            { controlPlane, wgInventory, providerRuntimeModuleFor, pkgs, lib, providerContracts ? null, }:
             let
               cpmData = controlPlane.data or { };
               wireguardProviderContracts =
-                controlPlane.providerContracts.wireguard or { };
+                if providerContracts != null then
+                  (providerContracts.wireguard or { })
+                else
+                  (controlPlane.providerContracts.wireguard or { });
               wgNodes = lib.concatLists (lib.mapAttrsToList
                 (_enterprise: enterpriseData:
                   lib.concatLists (lib.mapAttrsToList (_site: siteData:
@@ -272,12 +275,13 @@
                 else
                   throw
                   "${sms022TraceId}: WireGuard hostModule requires CPM bundle controlPlane.control_plane_model";
-                wgInventory = controlPlaneModel.wgInventory or { };
+                wgInventory = rendererInput.wgInventory or (controlPlaneModel.wgInventory or { });
+                providerContracts = rendererInput.providerContracts or (controlPlaneModel.providerContracts or null);
                 nodeConfigs = buildWireGuardNodeConfigs {
                   controlPlane = controlPlaneModel;
                   providerRuntimeModuleFor =
                     buildWireGuardProviderRuntimeModule;
-                  inherit wgInventory pkgs lib;
+                  inherit wgInventory providerContracts pkgs lib;
                 };
 
                 groupedConfigs = lib.foldl (acc:
