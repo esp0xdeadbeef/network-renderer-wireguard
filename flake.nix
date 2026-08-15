@@ -31,51 +31,7 @@
           providerContractCm =
             import ./s88/ControlModule/provider-contract.nix { inherit lib; };
           renderResultCm = import ./s88/ControlModule/render-result.nix { };
-<<<<<<< Updated upstream
           validateProviderContract = providerContract:
-=======
-
-          # Convert a raw WireGuard provider profile (.conf) into a plain,
-          # field-by-field record. This is the one place profile text is parsed;
-          # the renderer itself only consumes the extracted fields, never the
-          # raw file. Provider-injected fields (PostUp/PostDown/PreUp/PreDown,
-          # Table, SaveConfig, FwMark, and any unknown key) are dropped, not
-          # executed.
-          convertRawWgFileToSecrets =
-            raw:
-            let
-              lines = builtins.filter (l: l != "") (lib.splitString "\n" raw);
-              keyValue =
-                line:
-                let
-                  m = builtins.match "[[:space:]]*([A-Za-z]+)[[:space:]]*=[[:space:]]*(.*)[[:space:]]*" line;
-                in
-                if m == null then null else {
-                  key = builtins.elemAt m 0;
-                  value = builtins.elemAt m 1;
-                };
-              parsed = builtins.filter (p: p != null) (map keyValue lines);
-              get =
-                key:
-                let
-                  matches = builtins.filter (p: p.key == key) parsed;
-                in
-                if matches == [ ] then null else (builtins.head matches).value;
-            in
-            {
-              privateKey = get "PrivateKey";
-              address = get "Address";
-              dns = get "DNS";
-              mtu = get "MTU";
-              publicKey = get "PublicKey";
-              endpoint = get "Endpoint";
-              allowedIPs = get "AllowedIPs";
-              presharedKey = get "PresharedKey";
-              persistentKeepalive = get "PersistentKeepalive";
-            };
-          validateProviderContract =
-            providerContract:
->>>>>>> Stashed changes
             let
               providerState = providerContractCm.normalize providerContract;
               failedAssertions =
@@ -133,7 +89,6 @@
                 else
                   null;
 
-<<<<<<< Updated upstream
               providerContractSecretPaths = providerContract:
                 let
                   generatedPeer = providerContract.profile.generatedPeer or { };
@@ -234,48 +189,6 @@
                           // lib.optionalAttrs (peer ? persistentKeepalive
                             && builtins.isInt peer.persistentKeepalive) {
                               PersistentKeepalive = peer.persistentKeepalive;
-=======
-                          systemd.services."s88-provider-import-${wgIface}" = {
-                            description = "Import provider profile for ${node.overlayName}";
-                            wantedBy = [ "multi-user.target" ];
-                            after = [ "NetworkManager.service" ];
-                            requires = [ "NetworkManager.service" ];
-                            path = [
-                              pkgs.networkmanager
-                              pkgs.gawk
-                              pkgs.wireguard-tools
-                            ];
-                            serviceConfig = {
-                              Type = "oneshot";
-                              RemainAfterExit = true;
-                              ExecStart = pkgs.writeShellScript "s88-provider-import-${wgIface}-start" ''
-                                set -euo pipefail
-                                CONF=${lib.escapeShellArg profilePath}
-                                IFACE=${lib.escapeShellArg wgIface}
-                                test -s "$CONF" || { echo "[s88-wg] missing provider profile: $CONF" >&2; exit 1; }
-                                SANITIZED=$(mktemp)
-                                trap 'rm -f "$SANITIZED"' EXIT
-                                ${pkgs.gawk}/bin/awk '
-                                  /^[[:space:]]*(\[|#|$)/ { print; next }
-                                  {
-                                    key=$1
-                                    if (key == "PrivateKey" || key == "Address" || key == "DNS" || key == "MTU" || key == "ListenPort" || key == "PublicKey" || key == "Endpoint" || key == "AllowedIPs" || key == "PresharedKey" || key == "PersistentKeepalive")
-                                      print
-                                  }
-                                ' "$CONF" > "$SANITIZED"
-                                test -s "$SANITIZED" || { echo "[s88-wg] sanitized provider profile is empty: $CONF" >&2; exit 1; }
-                                if nmcli -t -f NAME con show | grep -qx "$IFACE"; then
-                                  nmcli con down "$IFACE" || true
-                                  nmcli con delete "$IFACE" || true
-                                fi
-                                nmcli connection import type ${profileFormat} file "$SANITIZED"
-                                UUID=$(nmcli -t -f UUID con show | tail -n1)
-                                nmcli con modify "$UUID" connection.id "$IFACE"
-                                nmcli con modify "$UUID" connection.interface-name "$IFACE"
-                                nmcli con modify "$UUID" connection.autoconnect yes
-                                nmcli con up "$UUID"
-                              '';
->>>>>>> Stashed changes
                             };
                       }) peers;
                     };
@@ -455,12 +368,14 @@
               (buildWireGuardProviderRenderResult
                 providerContract).artifacts.nixosModules.providerRuntime;
           };
-
-          inherit convertRawWgFileToSecrets;
         };
     in {
       nixosModules.default = import ./modules/wireguard-provider-runtime.nix;
       nixosModules.wireguard-provider-runtime = self.nixosModules.default;
+
+      packages = forAllSystems (system: {
+        wg-conf-to-secrets = (import nixpkgs { inherit system; }).callPackage ./pkgs/wg-conf-to-secrets { };
+      });
 
       libBySystem = forAllSystems mkSystemLib;
       lib = mkSystemLib "x86_64-linux";
