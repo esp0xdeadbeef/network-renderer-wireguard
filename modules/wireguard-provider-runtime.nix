@@ -75,8 +75,10 @@ in
 
     services.resolved.enable = lib.mkIf ownNetworkStack false;
     systemd.services.systemd-networkd-wait-online.enable = lib.mkIf ownNetworkStack (lib.mkForce false);
+    systemd.services.resolvconf.enable = lib.mkForce false;
 
     systemd.tmpfiles.rules = [
+      "L+ /etc/resolv.conf - - - - /run/NetworkManager/resolv.conf"
       "d /run/kea 0755 root root -"
       "d /var/lib/kea 0755 root root -"
       "d /etc/kea 0755 root root -"
