@@ -64,6 +64,10 @@ in
 {
   wanConnectionText =
     state:
+    let
+      bootstrapDns4 = lib.filter (d: !(lib.hasInfix ":" d)) state.bootstrapDnsForwarders;
+      bootstrapDns6 = lib.filter (d: lib.hasInfix ":" d) state.bootstrapDnsForwarders;
+    in
     ''
       [connection]
       id=${state.wanInterface}
@@ -75,10 +79,12 @@ in
       [ipv4]
       method=${state.wanIPv4Method}
       ${lib.optionalString (state.wanIPv4RouteMetric != null) "route-metric=${state.wanIPv4RouteMetric}"}
+      ${lib.optionalString (bootstrapDns4 != [ ]) "dns=${lib.concatStringsSep ";" bootstrapDns4};ignore-auto-dns=true"}
 
       [ipv6]
       method=${state.wanIPv6Method}
       ${lib.optionalString (state.wanIPv6RouteMetric != null) "route-metric=${state.wanIPv6RouteMetric}"}
+      ${lib.optionalString (bootstrapDns6 != [ ]) "dns=${lib.concatStringsSep ";" bootstrapDns6};ignore-auto-dns=true"}
     '';
 
   dispatcherService =
