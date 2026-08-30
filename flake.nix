@@ -259,12 +259,7 @@
                       };
                   };
                   providerRuntimeConfig =
-                    providerRuntimeModuleFor (
-                      providerContract
-                      // {
-                        providerBootstrapDns = node.providerBootstrapDns or { };
-                      }
-                    );
+                    providerRuntimeModuleFor providerContract;
                 in {
                   container = node.nodeName;
                   overlayName = node.overlayName;
