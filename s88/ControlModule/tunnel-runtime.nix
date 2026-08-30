@@ -109,6 +109,7 @@ in
           set -euo pipefail
           CONF=${lib.escapeShellArg state.profilePath}
           IFACE=${lib.escapeShellArg state.vpnInterface}
+          LAN=${lib.escapeShellArg state.lanInterface}
           FORMAT=${lib.escapeShellArg state.profileFormat}
           UUID_FILE=${lib.escapeShellArg state.uuidFile}
 
@@ -154,6 +155,8 @@ in
 
           for _ in $(seq 1 20); do
             if ip link show "$IFACE" >/dev/null 2>&1; then
+              ip link set "$LAN" up 2>/dev/null || true
+              echo "[wireguard-provider] tunnel $IFACE up; un-gated lan $LAN" >&2
               systemctl start wireguard-provider-ready.target
               exit 0
             fi
@@ -167,6 +170,13 @@ in
         ExecStop = pkgs.writeShellScript "wireguard-provider-dispatcher-stop" ''
           set -euo pipefail
           UUID_FILE=${lib.escapeShellArg state.uuidFile}
+          LAN=${lib.escapeShellArg state.lanInterface}
+          # Gate the fabric link so the upstream-selector ECMP drops this core
+          # while the tunnel is down instead of black-holing tenant traffic.
+          if ip link show "$LAN" >/dev/null 2>&1; then
+            ip link set "$LAN" down 2>/dev/null || true
+            echo "[wireguard-provider] tunnel stopping; gated lan $LAN down (ECMP failover)" >&2
+          fi
           if [ -f "$UUID_FILE" ]; then
             UUID=$(cat "$UUID_FILE")
             nmcli con down "$UUID" || true
@@ -183,24 +193,35 @@ in
   healthService =
     state:
     {
-      description = "Check provider tunnel health from model/provider contract";
+      description = "Check provider tunnel health and gate the LAN fabric link";
       after = [ "wireguard-provider-ready.target" ];
       requires = [ "wireguard-provider-ready.target" ];
+      path = with pkgs; [ iproute2 ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = pkgs.writeShellScript "wireguard-provider-health" ''
           set -euo pipefail
           iface=${lib.escapeShellArg state.vpnInterface}
+          lan=${lib.escapeShellArg state.lanInterface}
           rx_path="/sys/class/net/$iface/statistics/rx_bytes"
 
+          bring_lan_down() {
+            if ip link show "$lan" >/dev/null 2>&1; then
+              ip link set "$lan" down
+              echo "[wireguard-provider-health] tunnel $iface unhealthy; brought $lan down for ECMP failover" >&2
+            fi
+          }
+
           if [ ! -d "/sys/class/net/$iface" ]; then
-            echo "[wireguard-provider-health] $iface missing; restarting provider dispatcher" >&2
+            echo "[wireguard-provider-health] $iface missing; gating $lan and restarting dispatcher" >&2
+            bring_lan_down
             systemctl restart wireguard-provider-dispatcher.service
             exit 0
           fi
 
           if [ ! -r "$rx_path" ]; then
-            echo "[wireguard-provider-health] cannot read $rx_path; restarting provider dispatcher" >&2
+            echo "[wireguard-provider-health] cannot read $rx_path; gating $lan and restarting dispatcher" >&2
+            bring_lan_down
             systemctl restart wireguard-provider-dispatcher.service
             exit 0
           fi
@@ -211,10 +232,15 @@ in
 
           if [ "$rx_before" = "$rx_after" ]; then
             if ! ${pkgs.iputils}/bin/ping -c1 -I "$iface" -W2 ${lib.escapeShellArg state.healthTarget4} >/dev/null 2>&1; then
-              echo "[wireguard-provider-health] no RX delta and ping failed; restarting provider dispatcher" >&2
-              systemctl restart wireguard-provider-dispatcher.service
+              echo "[wireguard-provider-health] no RX delta and ping failed; gating $lan" >&2
+              bring_lan_down
               exit 0
             fi
+          fi
+
+          # Tunnel is healthy: re-open the fabric link so the ECMP can use it.
+          if ip link set "$lan" up 2>/dev/null; then
+            echo "[wireguard-provider-health] tunnel $iface healthy; un-gated lan $lan" >&2
           fi
         '';
       };
