@@ -13,11 +13,12 @@ let
             ''printf 'Address = %s\n' "$(cat ${lib.escapeShellArg generated.addressesFile})" >> "$CONF"''
           else
             lib.concatMapStringsSep "\n" (address: line "Address = ${address}") generated.addresses;
-        dnsLines =
-          if generated.dnsFile != null then
-            ''printf 'DNS = %s\n' "$(cat ${lib.escapeShellArg generated.dnsFile})" >> "$CONF"''
-          else
-            optionalLine (generated.dns != [ ]) "DNS = ${lib.concatStringsSep ", " generated.dns}";
+        # The provider DNS is only reachable through the tunnel, so it must
+        # not be written into the imported connection's resolv.conf before the
+        # tunnel is up — otherwise the endpoint hostname is queried against the
+        # tunnel's own DNS and the handshake can never start. The recursive
+        # resolver reads the same dnsFile directly for its forward-zone.
+        dnsLines = "";
         mtuLines = optionalLine (generated.mtu != null) "MTU = ${toString generated.mtu}";
         peerScript =
           peer:
@@ -150,12 +151,6 @@ in
           nmcli con modify "$NEW_UUID" connection.id "$IFACE"
           nmcli con modify "$NEW_UUID" connection.interface-name "$IFACE"
           nmcli con modify "$NEW_UUID" connection.autoconnect yes
-          # The tunnel DNS (from the profile) is only reachable through the
-          # tunnel, so it must not take over resolv.conf until the tunnel is
-          # up. Give it a low priority so the underlay DHCP DNS resolves the
-          # endpoint hostname first.
-          nmcli con modify "$NEW_UUID" ipv4.dns-priority 100
-          nmcli con modify "$NEW_UUID" ipv6.dns-priority 100
           nmcli con up "$NEW_UUID"
           echo "$NEW_UUID" > "$UUID_FILE"
 
