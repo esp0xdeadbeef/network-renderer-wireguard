@@ -88,12 +88,6 @@ in
       wanIPv4RouteMetric = let m = get [ "wan" "ipv4" "routeMetric" ] null; in if m == null then null else toString m;
       wanIPv6RouteMetric = let m = get [ "wan" "ipv6" "routeMetric" ] null; in if m == null then null else toString m;
 
-      # Bootstrap DNS used to resolve the provider endpoint before the tunnel
-      # is up. This must be a public/direct resolver, not the recursive tenant
-      # resolver and not the tunnel's own DNS (which is only reachable through
-      # the tunnel itself).
-      bootstrapDnsForwarders = get [ "providerBootstrapDns" "forwarders" ] [ ];
-
       dhcp4Subnet = if dhcp4Enable then required [ "services" "dhcp4" "subnet" ] else null;
       dhcp4Pool = if dhcp4Enable then required [ "services" "dhcp4" "pool" ] else null;
       dhcp4Gateway = if dhcp4Enable then required [ "services" "dhcp4" "gateway" ] else null;

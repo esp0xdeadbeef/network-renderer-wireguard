@@ -64,10 +64,6 @@ in
 {
   wanConnectionText =
     state:
-    let
-      bootstrapDns4 = lib.filter (d: !(lib.hasInfix ":" d)) state.bootstrapDnsForwarders;
-      bootstrapDns6 = lib.filter (d: lib.hasInfix ":" d) state.bootstrapDnsForwarders;
-    in
     ''
       [connection]
       id=${state.wanInterface}
@@ -79,12 +75,10 @@ in
       [ipv4]
       method=${state.wanIPv4Method}
       ${lib.optionalString (state.wanIPv4RouteMetric != null) "route-metric=${state.wanIPv4RouteMetric}"}
-      ${lib.optionalString (bootstrapDns4 != [ ]) "dns=${lib.concatStringsSep ";" bootstrapDns4};ignore-auto-dns=true"}
 
       [ipv6]
       method=${state.wanIPv6Method}
       ${lib.optionalString (state.wanIPv6RouteMetric != null) "route-metric=${state.wanIPv6RouteMetric}"}
-      ${lib.optionalString (bootstrapDns6 != [ ]) "dns=${lib.concatStringsSep ";" bootstrapDns6};ignore-auto-dns=true"}
     '';
 
   dispatcherService =
@@ -156,6 +150,12 @@ in
           nmcli con modify "$NEW_UUID" connection.id "$IFACE"
           nmcli con modify "$NEW_UUID" connection.interface-name "$IFACE"
           nmcli con modify "$NEW_UUID" connection.autoconnect yes
+          # The tunnel DNS (from the profile) is only reachable through the
+          # tunnel, so it must not take over resolv.conf until the tunnel is
+          # up. Give it a low priority so the underlay DHCP DNS resolves the
+          # endpoint hostname first.
+          nmcli con modify "$NEW_UUID" ipv4.dns-priority 100
+          nmcli con modify "$NEW_UUID" ipv6.dns-priority 100
           nmcli con up "$NEW_UUID"
           echo "$NEW_UUID" > "$UUID_FILE"
 
