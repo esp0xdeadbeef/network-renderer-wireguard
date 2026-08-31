@@ -161,7 +161,7 @@ in
               # handshake reaches the provider via the underlay, instead of
               # falling into the modeled DNS egress table whose dev-overlay
               # default would feed them straight back into this tunnel.
-              fwmark=$(wg show "$IFACE" fwmark | awk -F': ' '{print $2}')
+              fwmark=$(wg show "$IFACE" fwmark)
               if [ -n "$fwmark" ] && [ "$fwmark" != "off" ]; then
                 ip rule add priority 32700 fwmark "$fwmark" lookup main 2>/dev/null || true
                 ip -6 rule add priority 32700 fwmark "$fwmark" lookup main 2>/dev/null || true
