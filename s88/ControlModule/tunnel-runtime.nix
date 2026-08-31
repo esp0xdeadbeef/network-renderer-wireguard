@@ -156,6 +156,17 @@ in
 
           for _ in $(seq 1 20); do
             if ip link show "$IFACE" >/dev/null 2>&1; then
+              # The provider's own encrypted outer packets are fwmark-marked by
+              # NetworkManager. Route them through the main table so the
+              # handshake reaches the provider via the underlay, instead of
+              # falling into the modeled DNS egress table whose dev-overlay
+              # default would feed them straight back into this tunnel.
+              fwmark=$(wg show "$IFACE" fwmark | awk -F': ' '{print $2}')
+              if [ -n "$fwmark" ] && [ "$fwmark" != "off" ]; then
+                ip rule add priority 32700 fwmark "$fwmark" lookup main 2>/dev/null || true
+                ip -6 rule add priority 32700 fwmark "$fwmark" lookup main 2>/dev/null || true
+                echo "[wireguard-provider] fwmark $fwmark routed via main table" >&2
+              fi
               ip link set "$LAN" up 2>/dev/null || true
               echo "[wireguard-provider] tunnel $IFACE up; un-gated lan $LAN" >&2
               systemctl start wireguard-provider-ready.target
