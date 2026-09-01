@@ -256,6 +256,15 @@ in
               state="down"
               echo "[wireguard-provider-health] $iface egress failed; withdrew lane $lan" >&2
             fi
+            # After a prolonged outage, re-resolve the provider endpoint and
+            # retry the handshake: the regional endpoint hostname rotates to
+            # different servers, and the tunnel otherwise stays pinned to a
+            # stale address that no longer answers.
+            if [ "$misses" -ge 120 ]; then
+              echo "[wireguard-provider-health] $iface egress down too long; restarting dispatcher" >&2
+              systemctl restart wireguard-provider-dispatcher.service
+              misses=0
+            fi
           fi
           sleep 0.3
         done
