@@ -200,47 +200,66 @@ in
     requires = [ "wireguard-provider-ready.target" ];
     path = with pkgs; [
       coreutils
-      gawk
+      gnugrep
       iproute2
-      wireguard-tools
+      iputils
     ];
     serviceConfig = {
-      Type = "oneshot";
+      Type = "simple";
+      Restart = "always";
+      RestartSec = 2;
       ExecStart = pkgs.writeShellScript "wireguard-provider-health" ''
         set -euo pipefail
         iface=${lib.escapeShellArg state.vpnInterface}
         lan=${lib.escapeShellArg state.lanInterface}
+        dnsFile=${lib.escapeShellArg (state.generatedDnsFile or "")}
 
-        if [ ! -d "/sys/class/net/$iface" ]; then
-          echo "[wireguard-provider-health] $iface missing; restarting dispatcher" >&2
-          systemctl restart wireguard-provider-dispatcher.service
+        # The probe targets are the provider's in-tunnel DNS gateways read from
+        # the profile dnsFile (a runtime fact), never a hardcoded address. Both
+        # families are probed because the lane carries IPv4 and IPv6 together.
+        probe4=""
+        probe6=""
+        if [ -n "$dnsFile" ] && [ -f "$dnsFile" ]; then
+          probe4="$(tr ',' '\n' < "$dnsFile" | grep -E '^[0-9]+[.]' | head -1)"
+          probe6="$(tr ',' '\n' < "$dnsFile" | grep -E ':' | head -1)"
+        fi
+        if [ -z "$probe4" ] && [ -z "$probe6" ]; then
+          echo "[wireguard-provider-health] no in-tunnel probe targets in $dnsFile" >&2
           exit 0
         fi
 
-        # The tunnel's own liveness signal is the WireGuard handshake. When
-        # it is fresh the core can egress; when it is stale the core must
-        # withdraw its fabric lane so the upstream-selector's ECMP re-hashes
-        # to the remaining cores.
-        handshake="$(wg show "$iface" latest-handshakes 2>/dev/null | awk '{print $2}' | head -1)"
-        now="$(date +%s)"
-        if [ -n "$handshake" ] && [ "$handshake" != "0" ] && [ "$((now - handshake))" -lt 180 ]; then
-          ip link set "$lan" up 2>/dev/null || true
-        else
-          ip link set "$lan" down 2>/dev/null || true
-          echo "[wireguard-provider-health] $iface handshake stale; withdrew lane $lan" >&2
-        fi
-      '';
-    };
-  };
+        # Withdraw the lane after three consecutive misses on every configured
+        # family (BFD-style detect multiplier), and restore it on the first hit
+        # so the upstream-selector's ECMP re-hashes to the remaining cores.
+        state="up"
+        misses=0
+        while true; do
+          ok=0
+          if [ -n "$probe4" ] && ${pkgs.iputils}/bin/ping -c1 -W1 -I "$iface" "$probe4" >/dev/null 2>&1; then
+            ok=1
+          fi
+          if [ -n "$probe6" ] && ${pkgs.iputils}/bin/ping -6 -c1 -W1 -I "$iface" "$probe6" >/dev/null 2>&1; then
+            ok=1
+          fi
 
-  healthTimer = state: {
-    description = "Periodic provider tunnel health check";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "30s";
-      OnUnitActiveSec = state.healthInterval;
-      AccuracySec = "5s";
-      Unit = "wireguard-provider-health.service";
+          if [ "$ok" = "1" ]; then
+            misses=0
+            if [ "$state" != "up" ]; then
+              ip link set "$lan" up 2>/dev/null || true
+              state="up"
+              echo "[wireguard-provider-health] $iface egress recovered; restored lane $lan" >&2
+            fi
+          else
+            misses=$((misses + 1))
+            if [ "$misses" -ge 3 ] && [ "$state" != "down" ]; then
+              ip link set "$lan" down 2>/dev/null || true
+              state="down"
+              echo "[wireguard-provider-health] $iface egress failed; withdrew lane $lan" >&2
+            fi
+          fi
+          sleep 0.3
+        done
+      '';
     };
   };
 }
