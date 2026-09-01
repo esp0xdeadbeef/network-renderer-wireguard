@@ -250,23 +250,10 @@ in
           # keepalive response two thirds of the time) or on an ICMP-filtered
           # target, which gated the fabric link after every deploy and caused
           # intermittent drops.
-          #
-          # When the peer core's fabric link is reachable the ECMP lane is
-          # still carried by the other core, so the gate is not urgent: be
-          # lenient (3 minutes) and let this tunnel converge instead of
-          # flapping. When the peer is unreachable this is the last lane and
-          # a dead tunnel would black-hole flows, so fail over at the normal
-          # 45s threshold.
-          stale_seconds=45
-          peer4=${lib.escapeShellArg (if state.healthPeer4 != null then state.healthPeer4 else "")}
-          if [ -n "$peer4" ] && ${pkgs.iputils}/bin/ping -c1 -W1 "$peer4" >/dev/null 2>&1; then
-            stale_seconds=180
-          fi
-
           hs_age=$(wg show "$iface" latest-handshakes 2>/dev/null | awk '{print $2}' | sort -n | head -1 || true)
-          if [ -n "''${hs_age:-}" ] && [ "''${hs_age:-0}" -gt 0 ] && [ "''${hs_age:-9999}" -le "$stale_seconds" ]; then
+          if [ -n "''${hs_age:-}" ] && [ "''${hs_age:-0}" -gt 0 ] && [ "''${hs_age:-9999}" -le 45 ]; then
             if ip link set "$lan" up 2>/dev/null; then
-              echo "[wireguard-provider-health] tunnel $iface healthy (handshake ''${hs_age}s ago, stale=$stale_seconds); un-gated lan $lan" >&2
+              echo "[wireguard-provider-health] tunnel $iface healthy (handshake ''${hs_age}s ago); un-gated lan $lan" >&2
             fi
             exit 0
           fi
