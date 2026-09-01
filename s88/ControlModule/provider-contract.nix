@@ -76,6 +76,7 @@ in
 
       enableHealthCheck = get [ "services" "healthCheck" "enable" ] false;
       healthTarget4 = get [ "services" "healthCheck" "target4" ] null;
+      healthPeer4 = get [ "services" "healthCheck" "peer4" ] null;
       healthInterval = get [ "services" "healthCheck" "interval" ] null;
 
       lanAddresses = lib.filter (value: value != null) [
