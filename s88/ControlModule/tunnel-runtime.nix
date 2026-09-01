@@ -168,7 +168,7 @@ in
                 echo "[wireguard-provider] fwmark $fwmark routed via main table" >&2
               fi
               ip link set "$LAN" up 2>/dev/null || true
-              echo "[wireguard-provider] tunnel $IFACE up; un-gated lan $LAN" >&2
+              echo "[wireguard-provider] tunnel $IFACE up; lan $LAN ready" >&2
               systemctl start wireguard-provider-ready.target
               exit 0
             fi
@@ -182,13 +182,9 @@ in
         ExecStop = pkgs.writeShellScript "wireguard-provider-dispatcher-stop" ''
           set -euo pipefail
           UUID_FILE=${lib.escapeShellArg state.uuidFile}
-          LAN=${lib.escapeShellArg state.lanInterface}
-          # Gate the fabric link so the upstream-selector ECMP drops this core
-          # while the tunnel is down instead of black-holing tenant traffic.
-          if ip link show "$LAN" >/dev/null 2>&1; then
-            ip link set "$LAN" down 2>/dev/null || true
-            echo "[wireguard-provider] tunnel stopping; gated lan $LAN down (ECMP failover)" >&2
-          fi
+          # The upstream-selector owns the lane gating; the core never brings
+          # its fabric link down (that would also tear down the routing the
+          # tunnel needs to recover).
           if [ -f "$UUID_FILE" ]; then
             UUID=$(cat "$UUID_FILE")
             nmcli con down "$UUID" || true
@@ -205,42 +201,23 @@ in
   healthService =
     state:
     {
-      description = "Check provider tunnel health and gate the LAN fabric link";
+      description = "Keep the provider tunnel up and restart its dispatcher on loss";
       after = [ "wireguard-provider-ready.target" ];
       requires = [ "wireguard-provider-ready.target" ];
-      path = with pkgs; [ iproute2 ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = pkgs.writeShellScript "wireguard-provider-health" ''
           set -euo pipefail
           iface=${lib.escapeShellArg state.vpnInterface}
-          lan=${lib.escapeShellArg state.lanInterface}
 
-          bring_lan_down() {
-            if ip link show "$lan" >/dev/null 2>&1; then
-              ip link set "$lan" down
-              echo "[wireguard-provider-health] tunnel $iface unhealthy; brought $lan down for ECMP failover" >&2
-            fi
-          }
-
+          # The upstream-selector owns the lane selection and gates the lane
+          # when this core cannot egress; the core itself must never bring its
+          # fabric link down, because that also tears down the routing the
+          # tunnel needs to recover. This service only restarts the dispatcher
+          # when the tunnel interface disappears.
           if [ ! -d "/sys/class/net/$iface" ]; then
-            echo "[wireguard-provider-health] $iface missing; gating $lan and restarting dispatcher" >&2
-            bring_lan_down
+            echo "[wireguard-provider-health] $iface missing; restarting dispatcher" >&2
             systemctl restart wireguard-provider-dispatcher.service
-            exit 0
-          fi
-
-          # The fabric lane may only come back up once the core can actually
-          # egress through the tunnel: probe the health target through the
-          # tunnel interface. A reachable handshake alone is not enough — the
-          # core must be able to carry traffic, otherwise the ECMP would
-          # black-hole the hashed flows.
-          if ${pkgs.iputils}/bin/ping -c1 -I "$iface" -W2 ${lib.escapeShellArg state.healthTarget4} >/dev/null 2>&1; then
-            if ip link set "$lan" up 2>/dev/null; then
-              echo "[wireguard-provider-health] tunnel $iface egress probe ok; un-gated lan $lan" >&2
-            fi
-          else
-            bring_lan_down
           fi
         '';
       };
