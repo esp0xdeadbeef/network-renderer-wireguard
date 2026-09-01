@@ -208,7 +208,11 @@ in
       description = "Check provider tunnel health and gate the LAN fabric link";
       after = [ "wireguard-provider-ready.target" ];
       requires = [ "wireguard-provider-ready.target" ];
-      path = with pkgs; [ iproute2 ];
+      path = with pkgs; [
+        iproute2
+        gawk
+        wireguard-tools
+      ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = pkgs.writeShellScript "wireguard-provider-health" ''
@@ -238,6 +242,24 @@ in
             exit 0
           fi
 
+          # The definitive tunnel-health signal is the WireGuard handshake
+          # age: a healthy peer re-handshakes every persistent-keepalive
+          # interval (15s), so a handshake younger than a few keepalives means
+          # the tunnel is alive. The old RX-delta + ICMP heuristic
+          # false-negatives on an idle tunnel (the 5s RX window misses the 15s
+          # keepalive response two thirds of the time) or on an ICMP-filtered
+          # target, which gated the fabric link after every deploy and caused
+          # intermittent drops.
+          hs_age=$(wg show "$iface" latest-handshakes 2>/dev/null | awk '{print $2}' | sort -n | head -1 || true)
+          if [ -n "''${hs_age:-}" ] && [ "''${hs_age:-0}" -gt 0 ] && [ "''${hs_age:-9999}" -le 45 ]; then
+            if ip link set "$lan" up 2>/dev/null; then
+              echo "[wireguard-provider-health] tunnel $iface healthy (handshake ''${hs_age}s ago); un-gated lan $lan" >&2
+            fi
+            exit 0
+          fi
+
+          # No recent handshake: fall back to the RX-delta + ICMP probe so a
+          # freshly started tunnel can still prove itself before the gate.
           rx_before=$(cat "$rx_path")
           sleep 5
           rx_after=$(cat "$rx_path")
