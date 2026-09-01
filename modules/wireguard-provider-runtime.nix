@@ -144,11 +144,9 @@ in
 
     systemd.services.wireguard-provider-dispatcher = tunnelRuntimeCm.dispatcherService providerState;
 
-    systemd.services.wireguard-provider-health =
-      lib.mkIf enableHealthCheck (tunnelRuntimeCm.healthService providerState);
-
-    systemd.timers.wireguard-provider-health =
-      lib.mkIf enableHealthCheck (tunnelRuntimeCm.healthTimer providerState);
+    systemd.services.wireguard-provider-health = lib.mkIf enableHealthCheck (
+      tunnelRuntimeCm.healthService providerState
+    );
 
     environment.etc."kea/kea-dhcp4.conf" = lib.mkIf dhcp4Enable {
       text = dhcp4Config;
