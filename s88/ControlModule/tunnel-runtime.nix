@@ -208,18 +208,13 @@ in
       description = "Check provider tunnel health and gate the LAN fabric link";
       after = [ "wireguard-provider-ready.target" ];
       requires = [ "wireguard-provider-ready.target" ];
-      path = with pkgs; [
-        iproute2
-        gawk
-        wireguard-tools
-      ];
+      path = with pkgs; [ iproute2 ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = pkgs.writeShellScript "wireguard-provider-health" ''
           set -euo pipefail
           iface=${lib.escapeShellArg state.vpnInterface}
           lan=${lib.escapeShellArg state.lanInterface}
-          rx_path="/sys/class/net/$iface/statistics/rx_bytes"
 
           bring_lan_down() {
             if ip link show "$lan" >/dev/null 2>&1; then
@@ -235,46 +230,17 @@ in
             exit 0
           fi
 
-          if [ ! -r "$rx_path" ]; then
-            echo "[wireguard-provider-health] cannot read $rx_path; gating $lan and restarting dispatcher" >&2
-            bring_lan_down
-            systemctl restart wireguard-provider-dispatcher.service
-            exit 0
-          fi
-
-          # The definitive tunnel-health signal is the WireGuard handshake
-          # age: a healthy peer re-handshakes every persistent-keepalive
-          # interval (15s), so a handshake younger than a few keepalives means
-          # the tunnel is alive. The old RX-delta + ICMP heuristic
-          # false-negatives on an idle tunnel (the 5s RX window misses the 15s
-          # keepalive response two thirds of the time) or on an ICMP-filtered
-          # target, which gated the fabric link after every deploy and caused
-          # intermittent drops.
-          hs_age=$(wg show "$iface" latest-handshakes 2>/dev/null | awk '{print $2}' | sort -n | head -1 || true)
-          if [ -n "''${hs_age:-}" ] && [ "''${hs_age:-0}" -gt 0 ] && [ "''${hs_age:-9999}" -le 45 ]; then
+          # The fabric lane may only come back up once the core can actually
+          # egress through the tunnel: probe the health target through the
+          # tunnel interface. A reachable handshake alone is not enough — the
+          # core must be able to carry traffic, otherwise the ECMP would
+          # black-hole the hashed flows.
+          if ${pkgs.iputils}/bin/ping -c1 -I "$iface" -W2 ${lib.escapeShellArg state.healthTarget4} >/dev/null 2>&1; then
             if ip link set "$lan" up 2>/dev/null; then
-              echo "[wireguard-provider-health] tunnel $iface healthy (handshake ''${hs_age}s ago); un-gated lan $lan" >&2
+              echo "[wireguard-provider-health] tunnel $iface egress probe ok; un-gated lan $lan" >&2
             fi
-            exit 0
-          fi
-
-          # No recent handshake: fall back to the RX-delta + ICMP probe so a
-          # freshly started tunnel can still prove itself before the gate.
-          rx_before=$(cat "$rx_path")
-          sleep 5
-          rx_after=$(cat "$rx_path")
-
-          if [ "$rx_before" = "$rx_after" ]; then
-            if ! ${pkgs.iputils}/bin/ping -c1 -I "$iface" -W2 ${lib.escapeShellArg state.healthTarget4} >/dev/null 2>&1; then
-              echo "[wireguard-provider-health] no RX delta and ping failed; gating $lan" >&2
-              bring_lan_down
-              exit 0
-            fi
-          fi
-
-          # Tunnel is healthy: re-open the fabric link so the ECMP can use it.
-          if ip link set "$lan" up 2>/dev/null; then
-            echo "[wireguard-provider-health] tunnel $iface healthy; un-gated lan $lan" >&2
+          else
+            bring_lan_down
           fi
         '';
       };
