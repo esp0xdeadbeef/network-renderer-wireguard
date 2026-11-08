@@ -2,7 +2,7 @@
 # GAMP-ID: RTM-RUNNER-WG-001
 # GAMP-SCOPE: test runner — auto-discovers all tests, no hardcoded list
 set -euo pipefail
-exec > >(tee "/tmp/network-renderer-wireguard-tests.out")
+exec > >(tee "${TMPDIR:-/var/tmp}/network-renderer-wireguard-tests.out")
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="${REPO_ROOT}/tests"
