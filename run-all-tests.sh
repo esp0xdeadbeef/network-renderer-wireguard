@@ -17,14 +17,12 @@ if ! [[ "${MAX_JOBS}" =~ ^[0-9]+$ ]] || [[ "${MAX_JOBS}" -lt 1 ]]; then
   MAX_JOBS=1
 fi
 
-# ── Auto-discover all test files (excluding test.sh itself) ──
-TESTS=()
-for f in "${TEST_DIR}"/test-*.sh; do
-  [[ "$(basename "$f")" == "test.sh" ]] && continue
-  if [[ -f "$f" && -x "$f" ]]; then
-    TESTS+=("$(basename "$f")")
-  fi
-done
+# ── Auto-discover all test files ──
+# The entrypoint contract lives in scripts/lib/discover-tests.sh and is shared
+# byte-for-byte with the other network-* repositories.
+# shellcheck source=scripts/lib/discover-tests.sh
+source "${REPO_ROOT}/scripts/lib/discover-tests.sh"
+mapfile -t TESTS < <(discover_tests "${REPO_ROOT}")
 
 if [[ ${#TESTS[@]} -eq 0 ]]; then
   echo "No executable test-*.sh files found in ${TEST_DIR}" >&2
@@ -75,7 +73,7 @@ for test_name in "${TESTS[@]}"; do
       STATUS=$?
     else
       STATUS=0
-      timeout "${TEST_TIMEOUT}" "tests/${test_name}" || STATUS=$?
+      timeout "${TEST_TIMEOUT}" "$(discover_test_runner "${REPO_ROOT}/tests/${test_name}")" "tests/${test_name}" || STATUS=$?
     fi
 
     CHILD_END_MS="$(date +%s%3N)"
