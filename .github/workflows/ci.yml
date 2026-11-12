@@ -78,10 +78,13 @@ jobs:
           set -euo pipefail
           workspace="$(dirname "$GITHUB_WORKSPACE")"
 
-          # flake.lock is gitignored in this repository, so generate it first to
-          # learn the pinned revisions of the sibling inputs.
+          # flake.lock is committed (see tests/test-flake-lock-pinning.sh),
+          # so its pinned revisions are already known here. Regenerating it would
+          # defeat the pin: the sibling checkouts below must match the revisions
+          # this repository actually commits, not whatever the branches are now.
           if [ ! -f flake.lock ]; then
-            nix flake lock
+            echo "::error::flake.lock is missing; this repository pins its network-* inputs through it and must not resolve them at build time" >&2
+            exit 1
           fi
 
           nix eval --json --impure --expr '
