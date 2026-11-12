@@ -23,9 +23,14 @@ record_failure() {
 
 scan_source() {
   local pattern="$1"
+  # Comment-only lines are not policy; an inline ` # ...` trailer is stripped so
+  # provenance prose cannot satisfy (or break) the scan. The code part of the
+  # line is what gets classified.
   find "${src_dirs[@]}" -name '*.nix' -print0 2>/dev/null \
     | xargs -0 grep -HnE "${pattern}" 2>/dev/null \
-    | grep -vE '^\s*(#|//)' || true
+    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//)' \
+    | sed -E 's@^([^:]+:[0-9]+:)(.*[^[:space:]"])[[:space:]]+#.*@\1\2@' \
+    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*$' || true
 }
 
 seeded_negative() {
@@ -114,6 +119,11 @@ echo "  NAT provenance issues: ${nat_issues}"
 echo ""
 
 echo "--- Check 3: DNS config provenance ---"
+# DNS is WG-owned when it is (a) the per-host-stack projection gated on
+# ownNetworkStack, or (b) the contract-level suppression of a host resolver in
+# the runtime module (systemd-resolved/resolvconf are turned off so the
+# contract's dnsMode, not a host resolver, owns name resolution). Anything else
+# — resolver or nameserver policy in any other module — is an ownership gap.
 dns_scoped=0
 dns_issues=0
 
@@ -124,14 +134,24 @@ while IFS= read -r hit_line; do
   lineno="${rest%%:*}"
   rel_path="${file_path#${repo_root}/}"
   content="${rest#*:}"
+  stripped_content="${content//[[:space:]]/}"
 
-  if [[ "${rel_path}" == "${runtime_module}" && "${content}" == *ownNetworkStack* ]]; then
-    dns_scoped=$((dns_scoped + 1))
-  else
-    echo "  ISSUE: ${rel_path}:${lineno} — DNS config outside WG runtime contract scope"
-    dns_issues=$((dns_issues + 1))
-    failures=$((failures + 1))
+  if [[ "${rel_path}" == "${runtime_module}" ]]; then
+    if [[ "${content}" == *ownNetworkStack* ]]; then
+      dns_scoped=$((dns_scoped + 1))
+      continue
+    fi
+    # `services.resolved.enable = false;` / `systemd.services.resolvconf.enable = false;`
+    if [[ "${stripped_content}" == "services.resolved.enable=false;" \
+      || "${stripped_content}" == "systemd.services.resolvconf.enable=false;" ]]; then
+      dns_scoped=$((dns_scoped + 1))
+      continue
+    fi
   fi
+
+  echo "  ISSUE: ${rel_path}:${lineno} — DNS config outside WG runtime contract scope"
+  dns_issues=$((dns_issues + 1))
+  failures=$((failures + 1))
 done < <(scan_source '(networking\.resolver|networking\.nameservers|services\.resolved|dnsForwarder)')
 
 echo "  DNS config scoped to WG runtime contract: ${dns_scoped}"
