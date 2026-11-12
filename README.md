@@ -71,6 +71,14 @@ Construction tests: `network-renderer-wireguard/tests/`
   canonical bundle and emits NixOS module material.
 - Missing, partial, or inconsistent provider input must fail evaluation through
   visible assertions or missing-field errors.
+- An enabled health probe must name a canonical target source:
+  `services.healthCheck.target4`, or the `profile.generatedPeer.dnsFile` the
+  runtime reads its in-tunnel DNS gateway from. Enabling the probe with
+  neither is a missing-field error, not a case for a default, and a literal
+  `target4` must be an address. `services.healthCheck.interval` is required
+  whenever the probe is enabled. The rule lives in
+  `s88/ControlModule/provider-contract.nix` and is enforced on the production
+  path (`buildWireGuardProviderRenderResult`), not only in test fixtures.
 - Renderer output must be deterministic for the same provider contract.
 
 ## Allowed
