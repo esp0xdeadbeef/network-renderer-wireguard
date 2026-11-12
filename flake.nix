@@ -24,8 +24,6 @@
 
       mkSystemLib = system:
         let
-          sms041TraceId = "FS-470-HDS-010-SDS-010-SMS-041";
-          sms041Diagnostic = message: "${sms041TraceId}: ${message}";
           sms022TraceId = "FS-470-HDS-010-SDS-010-SMS-022";
           sms022Diagnostic = message: "${sms022TraceId}: ${message}";
           providerContractCm =
