@@ -275,6 +275,15 @@ if [[ -n "${health_check_bound_target_contract_errors}" ]]; then
   fail "health-check with an explicit target4 and interval must satisfy the contract, got: ${health_check_bound_target_contract_errors}"
 fi
 
+health_check_dnsfile_target_errors="$(eval_json healthCheckDnsFileTargetErrors)"
+# The production target source is the runtime-read dnsFile, so a probe bound to
+# it must satisfy the contract with no target4 at all: that is the branch whose
+# absence once let the assertion be relaxed to a constant.
+health_check_dnsfile_contract_errors="$(grep -F 'network-renderer-wireguard\|FS-470-HDS-010-SDS-010-SMS-041' <<<"${health_check_dnsfile_target_errors}" || true)"
+if [[ -n "${health_check_dnsfile_contract_errors}" ]]; then
+  fail "health-check bound only to profile.generatedPeer.dnsFile must satisfy the contract, got: ${health_check_dnsfile_contract_errors}"
+fi
+
 firewall_missing_action_errors="$(eval_json firewallMissingActionErrors)"
 grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: firewall rule action required by CPM provider contract, cannot default to allow or deny" <<<"${firewall_missing_action_errors}" || \
   fail "firewall missing action assertion must carry SMS-041 trace ID"

@@ -513,6 +513,35 @@ let
       };
     }
   );
+  # The probe's real target source in production is the in-tunnel DNS gateway
+  # read at runtime from profile.generatedPeer.dnsFile; that path, not target4,
+  # is why the assertion was once relaxed. Bound here without any target4.
+  healthCheckDnsFileTarget = evalWith (
+    lib.recursiveUpdate baseContract {
+      profile = {
+        mode = "generated-peer";
+        generatedPeer = {
+          privateKeyFile = "/run/keys/wg-private";
+          addresses = [ "10.70.0.2/32" ];
+          dnsFile = "/run/network-renderer-wireguard/test-provider.dns";
+          peers = [
+            {
+              publicKey = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabc=";
+              endpoint = "198.51.100.10:51820";
+              allowedIPs = [ "0.0.0.0/0" ];
+            }
+          ];
+        };
+      };
+      runtime = {
+        generatedConfigPath = "/run/network-renderer-wireguard/generated-test-provider.conf";
+      };
+      services.healthCheck = {
+        enable = true;
+        interval = "30s";
+      };
+    }
+  );
   firewallMissingAction = evalWith (
     baseContract
     // {
@@ -770,6 +799,7 @@ in
   generatedPeerMissingEndpointErrors = falseAssertionMessages generatedPeerMissingEndpoint;
   generatedPeerMissingPrivateKeyErrors = falseAssertionMessages generatedPeerMissingPrivateKey;
   healthCheckMissingTargetErrors = falseAssertionMessages healthCheckMissingTarget;
+  healthCheckDnsFileTargetErrors = falseAssertionMessages healthCheckDnsFileTarget;
   healthCheckPlaceholderTargetErrors = falseAssertionMessages healthCheckPlaceholderTarget;
   healthCheckMissingIntervalErrors = falseAssertionMessages healthCheckMissingInterval;
   healthCheckBoundTargetErrors = falseAssertionMessages healthCheckBoundTarget;
