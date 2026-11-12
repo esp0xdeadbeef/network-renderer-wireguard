@@ -67,6 +67,14 @@ let
     runtime = {
       generatedConfigPath = "/run/network-renderer-wireguard/fs470-generated.conf";
       uuidFile = "/run/network-renderer-wireguard/fs470.uuid";
+      # The contract default is `false` (provider-contract.nix:124). This case
+      # asserts `systemd.network.networks."20-edge-lan0".routes`, which the
+      # runtime module only emits under `lib.mkIf ownNetworkStack`, so without
+      # this the assertion looks up a unit that is correctly absent:
+      #   error: attribute '"20-edge-lan0"' missing
+      # The sibling case that exercises the same unit, fs470-hostmodule-provider-runtime.nix,
+      # sets it. This is the fixture catching up with the contract, not a renderer change.
+      ownNetworkStack = true;
     };
     dns.mode = "default";
     firewall = {
