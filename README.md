@@ -198,8 +198,24 @@ NixOS module. It must not regain provider semantics inline.
 
 ## Tests
 
-Run:
+Run the whole suite from the repository root, the way CI does:
 
 ```bash
-./tests/test.sh
+NETWORK_REPO_DIRECT_TEST_OK=1 ./run-all-tests.sh   # parallel, auto-discovered
 ```
+
+`run-all-tests.sh` discovers entrypoints through the shared
+`scripts/lib/discover-tests.sh` contract (byte-identical across the `network-*`
+repositories), runs them in parallel, and ends with `nix flake check`. Cases
+under `tests/lib/` are helpers invoked by an entrypoint, not entrypoints
+themselves.
+
+`tests/test.sh` is the serial equivalent: same discovery, one case at a time.
+
+```bash
+NETWORK_REPO_DIRECT_TEST_OK=1 ./tests/test.sh
+```
+
+The `NETWORK_REPO_DIRECT_TEST_OK=1` matters. Without it the runner treats a
+direct in-repo run as partial and warns, because the acceptance path is the
+locked full `network-*` sweep; setting it states that you intend a focused run.
