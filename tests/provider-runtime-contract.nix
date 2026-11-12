@@ -474,6 +474,15 @@ let
       };
     }
   );
+  healthCheckPlaceholderTarget = evalWith (
+    lib.recursiveUpdate baseContract {
+      services.healthCheck = {
+        enable = true;
+        interval = "30s";
+        target4 = "the-providers-dns-gateway";
+      };
+    }
+  );
   healthCheckMissingInterval = evalWith (
     lib.recursiveUpdate baseContract {
       services.healthCheck = {
@@ -748,6 +757,7 @@ in
   generatedPeerMissingEndpointErrors = falseAssertionMessages generatedPeerMissingEndpoint;
   generatedPeerMissingPrivateKeyErrors = falseAssertionMessages generatedPeerMissingPrivateKey;
   healthCheckMissingTargetErrors = falseAssertionMessages healthCheckMissingTarget;
+  healthCheckPlaceholderTargetErrors = falseAssertionMessages healthCheckPlaceholderTarget;
   healthCheckMissingIntervalErrors = falseAssertionMessages healthCheckMissingInterval;
   healthCheckBoundTargetErrors = falseAssertionMessages healthCheckBoundTarget;
   firewallMissingActionErrors = falseAssertionMessages firewallMissingAction;
