@@ -474,6 +474,23 @@ let
       };
     }
   );
+  healthCheckMissingInterval = evalWith (
+    lib.recursiveUpdate baseContract {
+      services.healthCheck = {
+        enable = true;
+        target4 = "10.66.0.1";
+      };
+    }
+  );
+  healthCheckBoundTarget = evalWith (
+    lib.recursiveUpdate baseContract {
+      services.healthCheck = {
+        enable = true;
+        interval = "30s";
+        target4 = "10.66.0.1";
+      };
+    }
+  );
   firewallMissingAction = evalWith (
     baseContract
     // {
@@ -731,6 +748,8 @@ in
   generatedPeerMissingEndpointErrors = falseAssertionMessages generatedPeerMissingEndpoint;
   generatedPeerMissingPrivateKeyErrors = falseAssertionMessages generatedPeerMissingPrivateKey;
   healthCheckMissingTargetErrors = falseAssertionMessages healthCheckMissingTarget;
+  healthCheckMissingIntervalErrors = falseAssertionMessages healthCheckMissingInterval;
+  healthCheckBoundTargetErrors = falseAssertionMessages healthCheckBoundTarget;
   firewallMissingActionErrors = falseAssertionMessages firewallMissingAction;
 
   renderResultShape = {

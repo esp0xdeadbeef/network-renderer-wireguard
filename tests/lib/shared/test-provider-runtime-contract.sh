@@ -255,6 +255,19 @@ health_check_missing_target_errors="$(eval_json healthCheckMissingTargetErrors)"
 grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: health check target required by CPM provider contract" <<<"${health_check_missing_target_errors}" || \
   fail "health-check missing target assertion must carry SMS-041 trace ID"
 
+health_check_missing_interval_errors="$(eval_json healthCheckMissingIntervalErrors)"
+grep -Fq "network-renderer-wireguard health check requires services.healthCheck.interval when enabled" <<<"${health_check_missing_interval_errors}" || \
+  fail "health-check missing interval assertion missing"
+
+health_check_bound_target_errors="$(eval_json healthCheckBoundTargetErrors)"
+# Only contract-owned diagnostics matter here: a bare eval also reports the
+# unrelated NixOS assertions (fileSystems, bootloader) that a module-only
+# evaluation cannot satisfy.
+health_check_bound_target_contract_errors="$(grep -F 'network-renderer-wireguard\|FS-470-HDS-010-SDS-010-SMS-041' <<<"${health_check_bound_target_errors}" || true)"
+if [[ -n "${health_check_bound_target_contract_errors}" ]]; then
+  fail "health-check with an explicit target4 and interval must satisfy the contract, got: ${health_check_bound_target_contract_errors}"
+fi
+
 firewall_missing_action_errors="$(eval_json firewallMissingActionErrors)"
 grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: firewall rule action required by CPM provider contract, cannot default to allow or deny" <<<"${firewall_missing_action_errors}" || \
   fail "firewall missing action assertion must carry SMS-041 trace ID"

@@ -73,6 +73,11 @@ in
 
     system.stateVersion = lib.mkDefault "25.11";
 
+    # DNS authority for the provider runtime is the contract's dnsMode.
+    # systemd-resolved and resolvconf are host resolvers that would shadow it,
+    # so both are disabled; NetworkManager owns /etc/resolv.conf instead.
+    # ownNetworkStack is deliberately not conditional here: host resolvers must
+    # not resolve-then-cache provider names even when the host owns the stack.
     services.resolved.enable = false;
     systemd.services.systemd-networkd-wait-online.enable = lib.mkForce false;
     systemd.services.resolvconf.enable = false;
