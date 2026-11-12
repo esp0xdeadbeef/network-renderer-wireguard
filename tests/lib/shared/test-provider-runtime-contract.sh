@@ -71,6 +71,7 @@ expect_eval_failure missingNat44ModeResult "provider contract missing nat.ipv4.e
 expect_eval_failure missingProfileModeResult "FS-470-HDS-010-SDS-010-SMS-041: network-renderer-wireguard provider contract missing profile.mode"
 expect_eval_failure badProviderClassRenderResult "provider.class must be self-hosted or commercial-imported"
 expect_eval_failure badProviderModeRenderResult "provider.mode must be egress-only, public-ingress, or routed-prefix"
+expect_eval_failure badHealthTargetRenderResult "FS-470-HDS-010-SDS-010-SMS-041: health check target required by CPM provider contract"
 expect_eval_failure badPrefixAuthorityRenderResult "provider.prefixAuthority must be none, host-only-128, routed-prefix, or provider-owned-prefix"
 
 self_hosted_missing_endpoint_errors="$(eval_json selfHostedMissingEndpointErrors)"

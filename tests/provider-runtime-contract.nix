@@ -436,6 +436,19 @@ let
         provider.mode = "assume-public-ingress";
       }
     );
+  # The health-target rule must hold at the flake boundary, not only in the
+  # test fixture's own view of `assertions`: a contract that enables the probe
+  # with a placeholder target has no usable target and must fail closed here.
+  badHealthTargetRenderResult =
+    flake.libBySystem.${system}.renderer.buildWireGuardProviderRenderResult (
+      lib.recursiveUpdate baseContract {
+        services.healthCheck = {
+          enable = true;
+          interval = "30s";
+          target4 = "the-providers-dns-gateway";
+        };
+      }
+    );
   badPrefixAuthorityRenderResult =
     flake.libBySystem.${system}.renderer.buildWireGuardProviderRenderResult (
       lib.recursiveUpdate baseContract {
@@ -795,6 +808,7 @@ in
     missingProfileModeResult
     badProviderClassRenderResult
     badProviderModeRenderResult
+    badHealthTargetRenderResult
     badPrefixAuthorityRenderResult
     missingRequiredCapabilityResult
     ;
