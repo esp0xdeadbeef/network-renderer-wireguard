@@ -195,6 +195,11 @@ let
         }
       ];
       nat.ipv6.enable = false;
+      # This case asserts `systemd.network.networks."20-lan0".routes`, which the
+      # runtime module emits only under `lib.mkIf ownNetworkStack`, and the
+      # contract default is false (provider-contract.nix:124). Set here the same
+      # way `nameInferenceContract` below sets it next to its own unit assertion.
+      runtime.ownNetworkStack = true;
     };
   selfHostedExposureValid = evalWith selfHostedExposureContract;
   selfHostedBadReturnRoute = evalWith (
@@ -332,6 +337,10 @@ let
         ];
       };
       nat.ipv6.enable = false;
+      # Emits systemd.network.networks."20-lan0" only under `mkIf ownNetworkStack`,
+      # and the contract default is false (provider-contract.nix:124). This case
+      # asserts that unit's routes.
+      runtime.ownNetworkStack = true;
     };
   routedPrefixValid = evalWith routedPrefixContract;
   providerOwnedPrefixContract =
@@ -357,6 +366,10 @@ let
         ];
       };
       nat.ipv6.enable = false;
+      # Emits systemd.network.networks."20-lan0" only under `mkIf ownNetworkStack`,
+      # and the contract default is false (provider-contract.nix:124). This case
+      # asserts that unit's routes.
+      runtime.ownNetworkStack = true;
     };
   providerOwnedPrefixValid = evalWith providerOwnedPrefixContract;
   clientPrefixMissingReturnRoute = evalWith (

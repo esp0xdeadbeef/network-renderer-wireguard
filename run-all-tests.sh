@@ -73,7 +73,15 @@ for test_name in "${TESTS[@]}"; do
       STATUS=$?
     else
       STATUS=0
-      timeout "${TEST_TIMEOUT}" "$(discover_test_runner "${REPO_ROOT}/tests/${test_name}")" "tests/${test_name}" || STATUS=$?
+      # The runner script is `bash`; the case file is its first argument and the
+      # trace id its second. It was passing `bash` with only "tests/<name>" --
+      # no script, so bash tried to execute "tests/<name>" as a program, and the
+      # shim then rejected the same string as a trace id because it is prefixed
+      # with "tests/" and its guard is `FS-*-HDS-*-SDS-*-SMS-*`. 11 of 14 cases
+      # died that way. Running one by hand as `bash tests/<name>.sh <name>` got
+      # past the guard into the real evaluation, which is what identified it.
+      timeout "${TEST_TIMEOUT}" "$(discover_test_runner "${REPO_ROOT}/tests/${test_name}")" \
+        "tests/${test_name}" "${test_name%.sh}" || STATUS=$?
     fi
 
     CHILD_END_MS="$(date +%s%3N)"
