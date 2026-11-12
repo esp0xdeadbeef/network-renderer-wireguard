@@ -124,23 +124,21 @@ in
       ownNetworkStack = get [ "runtime" "ownNetworkStack" ] false;
 
       enableHealthCheck = get [ "services" "healthCheck" "enable" ] false;
-      healthTarget4 = get [ "services" "healthCheck" "target4" ] null;
-      healthInterval = get [ "services" "healthCheck" "interval" ] null;
+      healthIntervalBound =
+        isNonEmptyString (get [ "services" "healthCheck" "interval" ] null);
 
       # Every canonical source a health probe target may come from: the
       # contract's own target4 field and the generated-peer dnsFile the probe
       # reads at runtime. An enabled probe with neither has nothing to ping.
-      healthTargetSources = lib.filter isNonEmptyString [
-        healthTarget4
-        (get [ "profile" "generatedPeer" "dnsFile" ] null)
-      ];
-      healthTargetBound = healthTargetSources != [ ];
-      # dnsFile is a path bound at runtime, so it cannot be checked statically;
-      # a literal target4 is checked so a placeholder cannot stand in for one.
-      healthTargetWellFormed =
-        !isNonEmptyString healthTarget4
-        || (builtins.match "^[0-9A-Fa-f:.]+$" healthTarget4 != null);
-      healthIntervalBound = isNonEmptyString healthInterval;
+      # dnsFile is bound at runtime so it cannot be checked statically; a
+      # literal target4 is, so a placeholder cannot stand in for one.
+      healthTargetBound =
+        let
+          target4 = get [ "services" "healthCheck" "target4" ] null;
+          dnsFile = get [ "profile" "generatedPeer" "dnsFile" ] null;
+        in
+        isNonEmptyString dnsFile
+        || (isNonEmptyString target4 && builtins.match "^[0-9A-Fa-f:.]+$" target4 != null);
 
       lanAddresses = lib.filter (value: value != null) [
         lanIPv4
@@ -491,10 +489,6 @@ in
       # target4 must actually be an address, not a placeholder string.
       assertion = !state.enableHealthCheck || state.healthTargetBound;
       message = diagnostic "health check target required by CPM provider contract";
-    }
-    {
-      assertion = !state.enableHealthCheck || state.healthTargetWellFormed;
-      message = diagnostic "health check target from the provider contract or profile dnsFile must be an IP address";
     }
     {
       assertion = !state.enableHealthCheck || state.healthIntervalBound;

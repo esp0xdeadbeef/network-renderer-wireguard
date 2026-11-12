@@ -259,6 +259,12 @@ health_check_missing_interval_errors="$(eval_json healthCheckMissingIntervalErro
 grep -Fq "network-renderer-wireguard health check requires services.healthCheck.interval when enabled" <<<"${health_check_missing_interval_errors}" || \
   fail "health-check missing interval assertion missing"
 
+# A bound target that is not an address is as unbound as a missing one: the probe
+# would ping a placeholder string.
+health_check_placeholder_target_errors="$(eval_json healthCheckPlaceholderTargetErrors)"
+grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: health check target required by CPM provider contract" <<<"${health_check_placeholder_target_errors}" || \
+  fail "health-check placeholder target must be rejected as an unbound target"
+
 health_check_bound_target_errors="$(eval_json healthCheckBoundTargetErrors)"
 # Only contract-owned diagnostics matter here: a bare eval also reports the
 # unrelated NixOS assertions (fileSystems, bootloader) that a module-only
