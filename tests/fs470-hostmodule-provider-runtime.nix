@@ -131,10 +131,7 @@ let
   evalContainer =
     withProviderContract:
     let
-      rendererInput = {
-        hostName = "s-router-nixos";
-        controlPlane.control_plane_model = mkControlPlane withProviderContract;
-      };
+      rendererInput = { hostName = "s-router-nixos"; } // (import ./lib/wg-canonical.nix (mkControlPlane withProviderContract));
       hostOutput = (hostModule rendererInput { config = { }; inherit lib pkgs; }).content;
       container = hostOutput.containers.wireguard-remote-egress;
       evaluated = import (flake.inputs.nixpkgs + "/nixos/lib/eval-config.nix") {

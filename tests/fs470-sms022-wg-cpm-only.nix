@@ -25,9 +25,7 @@ let
   evalNetdevs =
     wgData:
     let
-      rendererInput = {
-        hostName = "s-router-nixos";
-        controlPlane.control_plane_model = {
+      rendererInput = { hostName = "s-router-nixos"; } // (import ./lib/wg-canonical.nix ({
           wgInventory.wg-mini = wgData;
           data.acme.lab.overlays.wg-mini = {
             terminateOn = [ "wg-mini-node" ];
@@ -37,8 +35,7 @@ let
               addr6 = "fd42:66:90::2/128";
             };
           };
-        };
-      };
+        }));
       evaluated = import (flake.inputs.nixpkgs + "/nixos/lib/eval-config.nix") {
         inherit system;
         modules = [

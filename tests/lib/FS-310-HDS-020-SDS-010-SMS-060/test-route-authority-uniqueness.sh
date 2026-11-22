@@ -43,9 +43,7 @@ REPO_ROOT="${repo_root}" nix eval --impure --json --expr '
 
     evalNetdevs = peers:
       let
-        rendererInput = {
-          hostName = "s-router-nixos";
-          controlPlane.control_plane_model = {
+        rendererInput = { hostName = "s-router-nixos"; } // (import (repoRoot + "/tests/lib/wg-canonical.nix") ({
             wgInventory.wg-mini = {
               interface = "wg-mini";
               privateKeyFile = "/run/secrets/wireguard-mini-provider-private-key";
@@ -57,8 +55,7 @@ REPO_ROOT="${repo_root}" nix eval --impure --json --expr '
               providerBootstrapDns = [ ];
               nodes.wg-mini-node = { addr4 = "10.66.90.2/32"; addr6 = "fd42:66:90::2/128"; };
             };
-          };
-        };
+          }));
         evaluated = import (flake.inputs.nixpkgs + "/nixos/lib/eval-config.nix") {
           inherit system;
           modules = [ (hostModule rendererInput) ];

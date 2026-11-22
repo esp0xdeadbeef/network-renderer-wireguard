@@ -47,34 +47,30 @@
           # Accepts pre-compiled CPM output (controlPlane) and
           # WG overlay data (wgInventory, extracted from CPM model) — satisfies SMS-021.
           buildWireGuardNodeConfigs =
-            { controlPlane, wgInventory, providerRuntimeModuleFor, pkgs, lib, providerContracts ? null, }:
+            { canonicalSites, wgInventory, providerRuntimeModuleFor, pkgs, lib, providerContracts ? null, }:
             let
-              cpmData = controlPlane.data or { };
               wireguardProviderContracts =
                 if providerContracts != null then
                   (providerContracts.wireguard or { })
                 else
-                  (controlPlane.providerContracts.wireguard or { });
-              wgNodes = lib.concatLists (lib.mapAttrsToList
-                (_enterprise: enterpriseData:
-                  lib.concatLists (lib.mapAttrsToList (_site: siteData:
-                    let
-                      overlays = siteData.overlays or { };
-                      wgOverlayNodes = lib.concatLists (lib.mapAttrsToList
-                        (_overlayName: overlay:
-                          let
-                            nodes = overlay.terminateOn or [ ];
-                            nodeAddrs = overlay.nodes or { };
-                          in map (nodeName:
-                            let nodeAddr = nodeAddrs.${nodeName} or { };
-                            in {
-                              inherit nodeName;
-                              overlayName = _overlayName;
-                              addr4 = nodeAddr.addr4 or null;
-                              addr6 = nodeAddr.addr6 or null;
-                              inherit (overlay) providerBootstrapDns;
-                            }) nodes) overlays);
-                    in wgOverlayNodes) enterpriseData)) cpmData);
+                  { };
+              wgNodes = lib.concatLists (map
+                (entry:
+                  let
+                    nodeNames = entry.terminateOn or [ ];
+                    nodeAddrs = entry.nodes or { };
+                  in map
+                    (nodeName:
+                      let nodeAddr = nodeAddrs.${nodeName} or { };
+                      in {
+                        inherit nodeName;
+                        overlayName = entry.overlay;
+                        addr4 = nodeAddr.addr4 or null;
+                        addr6 = nodeAddr.addr6 or null;
+                        inherit (entry) providerBootstrapDns;
+                      })
+                    nodeNames)
+                (canonicalSites.overlays or [ ]));
 
               # Filter wgNodes to only those with wireguard data in wgInventory.
               # Overlays without wireguard data (e.g., nebula east-west) are
@@ -304,18 +300,14 @@
             hostModule = rendererInput:
               { config, lib, pkgs, ... }:
               let
-                controlPlaneBundle = rendererInput.controlPlane or (throw
-                  "${sms022TraceId}: WireGuard hostModule requires pre-compiled CPM output in controlPlane");
-                controlPlaneModel = if builtins.isAttrs
-                (controlPlaneBundle.control_plane_model or null) then
-                  controlPlaneBundle.control_plane_model
-                else
-                  throw
-                  "${sms022TraceId}: WireGuard hostModule requires CPM bundle controlPlane.control_plane_model";
-                wgInventory = rendererInput.wgInventory or (controlPlaneModel.wgInventory or { });
-                providerContracts = rendererInput.providerContracts or (controlPlaneModel.providerContracts or null);
+                canonicalSites = rendererInput.canonicalSites or (throw
+                  "${sms022TraceId}: WireGuard hostModule requires the bundle's canonicalSites");
+                canonicalWireGuard = rendererInput.canonicalWireGuard or (throw
+                  "${sms022TraceId}: WireGuard hostModule requires the bundle's canonicalWireGuard");
+                wgInventory = rendererInput.wgInventory or (canonicalWireGuard.providers or { });
+                providerContracts = rendererInput.providerContracts or (canonicalWireGuard.contracts or null);
                 nodeConfigs = buildWireGuardNodeConfigs {
-                  controlPlane = controlPlaneModel;
+                  inherit canonicalSites;
                   providerRuntimeModuleFor =
                     buildWireGuardProviderRuntimeModule;
                   inherit wgInventory providerContracts pkgs lib;
@@ -367,7 +359,10 @@
                     "platformBinding"
                   ];
                 in hostModule (forwarded // {
-                  controlPlane = validated.controlPlaneEnvelope;
+                  canonicalSites = (bundle.network.data.canonicalSites or (throw
+                    "WireGuard renderer requires the bundle's canonicalSites"));
+                  canonicalWireGuard = (bundle.network.data.canonicalWireGuard or (throw
+                    "WireGuard renderer requires the bundle's canonicalWireGuard"));
                   canonicalBundleIdentity = validated.bundleIdentity;
                   canonicalBindingIdentity = validated.bindingIdentity;
                 });
@@ -438,7 +433,7 @@
           accepted = renderer.canonical.validateInput { inherit bundle; };
           rawRejected = !(builtins.tryEval (builtins.deepSeq
             (renderer.canonical.validateInput {
-              bundle = { control_plane_model = { }; };
+              bundle = { rawProducerPayload = { }; };
             }) true)).success;
         in assert accepted.bundleIdentity == bundle.bundleIdentity;
         assert rawRejected; {

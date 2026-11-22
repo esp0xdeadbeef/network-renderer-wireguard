@@ -13,9 +13,7 @@ let
   evalModule =
     wgInventory:
     let
-      rendererInput = {
-        hostName = "s-router-nixos";
-        controlPlane.control_plane_model = {
+      rendererInput = { hostName = "s-router-nixos"; } // (import ("'"${repo_root}"'" + "/tests/lib/wg-canonical.nix") ({
           inherit wgInventory;
           data.acme.lab.overlays.wg-mini = {
             terminateOn = [ "wg-mini-node" ];
@@ -25,8 +23,7 @@ let
               addr6 = "fd42:66:90::2/128";
             };
           };
-        };
-      };
+        }));
     in
       (hostModule rendererInput { config = { }; inherit lib pkgs; }).content;
   secretOutput = evalModule {
