@@ -359,9 +359,17 @@
                     "platformBinding"
                   ];
                 in hostModule (forwarded // {
-                  canonicalSites = (bundle.network.data.canonicalSites or (throw
+                  # The bundle's canonical section, which
+                  # network-realization-model projects from the producer. Reading
+                  # `bundle.network.data.canonicalSites` assumed the producer put
+                  # its collections on the artifact's top level; a producer that
+                  # wraps them (a build result that nests the envelope) publishes
+                  # them one level down, and the read found nothing.
+                  # The bundle section is the same value, normalized, and is the
+                  # contract a renderer is supposed to map.
+                  canonicalSites = (bundle.canonical.canonicalSites or (throw
                     "WireGuard renderer requires the bundle's canonicalSites"));
-                  canonicalWireGuard = (bundle.network.data.canonicalWireGuard or (throw
+                  canonicalWireGuard = (bundle.canonical.canonicalWireGuard or (throw
                     "WireGuard renderer requires the bundle's canonicalWireGuard"));
                   canonicalBundleIdentity = validated.bundleIdentity;
                   canonicalBindingIdentity = validated.bindingIdentity;
