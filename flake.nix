@@ -157,6 +157,20 @@
                       (peer: secretPathOrNull (peer.presharedKeyFile or null))
                       peers ++ lib.optionals (providerContract != null)
                       (providerContractSecretPaths providerContract)));
+                  duplicateAllowedIP =
+                    let
+                      claims = lib.concatMap
+                        (peer: if builtins.isList (peer.allowedIPs or null) then peer.allowedIPs else [ ])
+                        peers;
+                      counts = builtins.foldl'
+                        (acc: ip: acc // { ${ip} = (acc.${ip} or 0) + 1; })
+                        { }
+                        claims;
+                      duplicates = builtins.filter
+                        (ip: counts.${ip} > 1)
+                        (builtins.attrNames counts);
+                    in
+                    if duplicates == [ ] then null else builtins.head duplicates;
                   wireguardNetdevConfig = {
                     boot.kernelModules = [ "wireguard" ];
 
@@ -174,7 +188,18 @@
                       } // lib.optionalAttrs (listenPort != null) {
                         ListenPort = listenPort;
                       };
-                      wireguardPeers = map (peer: {
+                      # FS-315 / FS-310-HDS-020-SDS-010-SMS-060: one route
+                      # authority carries ONE modelled next-hop set. Two peers of
+                      # the same interface claiming the same prefix (in practice
+                      # 0.0.0.0/0) is one authority with two next hops, and
+                      # `ip route replace` keys on (table, destination) -- so the
+                      # survivor depends on write order. The model names one
+                      # member; a peer set that names two is refused here rather
+                      # than emitted.
+                      wireguardPeers = if duplicateAllowedIP != null then
+                        throw (sms022Diagnostic
+                          "WireGuard interface ${wgIface} has more than one peer claiming ${duplicateAllowedIP} (one route authority, one next-hop set)")
+                      else map (peer: {
                         wireguardPeerConfig = {
                           PublicKey = if peer ? publicKey
                           && builtins.isString peer.publicKey && peer.publicKey
