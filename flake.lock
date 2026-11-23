@@ -170,11 +170,11 @@
         "nixpkgs-network": "nixpkgs-network_8"
       },
       "locked": {
-        "lastModified": 1795382814,
-        "narHash": "sha256-HL3ZqM+6vK5HAIlhLGatMwQ2C/mM69vuU1FwaTRXw78=",
+        "lastModified": 1795398893,
+        "narHash": "sha256-nOeg/O5Gndke1JiXJXMhWoW093IBcG/Zr0GoNfE9yzA=",
         "owner": "esp0xdeadbeef",
         "repo": "network-control-plane-model",
-        "rev": "11ad3ac97a05048a7a2a1003514976848f90ff36",
+        "rev": "aac8b5ca8a62dd8afda1e1131c8a27ab2125f75a",
         "type": "github"
       },
       "original": {
@@ -229,11 +229,11 @@
         "nixpkgs-network": "nixpkgs-network_11"
       },
       "locked": {
-        "lastModified": 1795382814,
-        "narHash": "sha256-HL3ZqM+6vK5HAIlhLGatMwQ2C/mM69vuU1FwaTRXw78=",
+        "lastModified": 1795398893,
+        "narHash": "sha256-nOeg/O5Gndke1JiXJXMhWoW093IBcG/Zr0GoNfE9yzA=",
         "owner": "esp0xdeadbeef",
         "repo": "network-control-plane-model",
-        "rev": "11ad3ac97a05048a7a2a1003514976848f90ff36",
+        "rev": "aac8b5ca8a62dd8afda1e1131c8a27ab2125f75a",
         "type": "github"
       },
       "original": {
@@ -497,11 +497,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795385250,
-        "narHash": "sha256-J71GOUxCzPji2rmSkYn0eLWw2t7yg+e3kBFLuxEbzAw=",
+        "lastModified": 1795394558,
+        "narHash": "sha256-QddjE5HML3BTJRNxjctv46ApiOgNE4D8BL3fH3Rl5zU=",
         "owner": "esp0xdeadbeef",
         "repo": "network-realization-model",
-        "rev": "4b5d8e50f9341d2685384f885c9336154efb821a",
+        "rev": "0c1ef843d82be2c71e59581a4ac770c42ea6f06f",
         "type": "github"
       },
       "original": {
@@ -589,11 +589,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795382229,
-        "narHash": "sha256-NbwUnu18MTIMPovBVQJX5dhJP3w1rlYFPKwtkR8EaJ8=",
+        "lastModified": 1795399729,
+        "narHash": "sha256-nUEMQIqvjNldfKGHzcRS4tMHlW1szlq6jnA39Idc76Y=",
         "owner": "esp0xdeadbeef",
         "repo": "network-realization-schema",
-        "rev": "4e60f52083096c0a94097dcd63b71542f56aeeb1",
+        "rev": "436cc1b2211e5937836a770e3c62e951fae66c12",
         "type": "github"
       },
       "original": {
