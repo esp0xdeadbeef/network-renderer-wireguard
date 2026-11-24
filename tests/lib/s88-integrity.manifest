@@ -6,5 +6,5 @@
 # so the change is reviewed instead of landing quietly. See
 # tests/test-s88-test-integrity.sh for what this does and does not detect.
 6b376114c3be0f6995f372a50cf30910c066ee662b0e88e5080f4d19f3ffa9ec  tests/test-s88-code-traceability.sh
-ed696f8df825e691f762bc27b45ae0848933c6abf122db2387d013a0b3005b2a  tests/test-s88-import-graph-coherence.sh
+736ac9398d308190e52ac7fd7cde838f9aa55a3b3197b89a51493af94626f4d2  tests/test-s88-import-graph-coherence.sh
 a5c7a4bde08305aca2c7e31c242d58024a871c26f8c71f705c7bc68efe7fe596  tests/test-s88-test-integrity.sh
