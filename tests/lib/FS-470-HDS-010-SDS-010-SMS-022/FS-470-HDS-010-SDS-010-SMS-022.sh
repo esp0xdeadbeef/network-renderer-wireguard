@@ -53,7 +53,7 @@ expect_eval_failure() {
     return
   fi
   if grep -Fq "${expected}" <<<"${output}"; then
-    echo "PASS ${attr} rejected with SMS-022 diagnostic"
+    echo "PASS ${attr} rejected with FS-470-HDS-010-SDS-010-SMS-022 diagnostic"
   else
     printf '%s\n' "${output}" >&2
     record_failure "${attr} missing expected diagnostic: ${expected}"
@@ -85,4 +85,4 @@ if (( failures > 0 )); then
   exit 1
 fi
 
-echo "PASS ${trace_id}: WG renderer consumes CPM-preserved WG data only and fails closed with SMS-022 diagnostics"
+echo "PASS ${trace_id}: WG renderer consumes CPM-preserved WG data only and fails closed with FS-470-HDS-010-SDS-010-SMS-022 diagnostics"

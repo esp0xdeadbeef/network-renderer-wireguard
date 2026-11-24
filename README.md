@@ -37,7 +37,8 @@ All behavior requirements originate from the FS-470 spec chain.
 ### SMT Status (2026-06-12)
 
 - FS-470-HDS-010-SDS-010-SMS-010 (Coordinator): **OK** — All child atoms tested at `network-renderer-wireguard@819faed`
-- SMS-020 through SMS-040: **OK** — Full suite PASS
+- FS-470-HDS-010-SDS-010-SMS-020 through FS-470-HDS-010-SDS-010-SMS-040: **OK** —
+  Full suite PASS
 - All child SMS rows delegate to coordinator. Coordinator has no independent construction beyond child module contracts.
 
 ### Pipeline
@@ -53,7 +54,7 @@ binding categories under one identity and schema. Per FS-983 and FS-166, the
 renderer does not parse raw intent, inventory, unvalidated CPM output, or
 provider profile files for network meaning.
 
-### SMS-010 Key Requirements
+### FS-470-HDS-010-SDS-010-SMS-010 Key Requirements
 
 - Container definition MUST include `wg` binary in nix store closure
 - Persistent WireGuard interface required (no bash wrapper that exits)

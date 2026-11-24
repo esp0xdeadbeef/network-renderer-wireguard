@@ -57,7 +57,7 @@ expect_eval_failure() {
 
 # ================================================================
 # Check 1: Build valid contract and verify render result structure
-# SMS-010 P1, P2: Consume CPM contract → produce render result
+# FS-470-HDS-010-SDS-010-SMS-010 P1, P2: Consume CPM contract → produce render result
 # ================================================================
 echo "--- Check 1: Valid contract → render result structure ---"
 
@@ -159,7 +159,7 @@ echo ""
 
 # ================================================================
 # Check 2: Delegated routes — verify NixOS module structure
-# SMS-010 P3: Produce NixOS module that enables WG interface on target container
+# FS-470-HDS-010-SDS-010-SMS-010 P3: Produce NixOS module that enables WG interface on target container
 # ================================================================
 echo "--- Check 2: NixOS module structure with WG config ---"
 

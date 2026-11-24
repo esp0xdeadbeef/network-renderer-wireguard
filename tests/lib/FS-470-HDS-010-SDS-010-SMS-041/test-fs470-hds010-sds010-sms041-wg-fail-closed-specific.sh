@@ -2,7 +2,7 @@
 # GAMP-ID: FS-470-HDS-010-SDS-010-SMS-041
 # GAMP-SCOPE: software-module-test
 # Focused construction test: WireGuard renderer fail-closed contract —
-# specific forbidden defaults from SMS-110 audit remediation.
+# specific forbidden defaults from FS-470-HDS-010-SDS-010-SMS-110 audit remediation.
 #
 # SMS acceptance predicates:
 #   P1: No `or "wg-egress"` interface name default in production code.
@@ -11,7 +11,7 @@
 #   P4: No `or "allow"` / `or "deny"` firewall rule action defaults.
 #   P5: Profile mode is declared explicitly (required), not inferred from shape.
 #   P6: No default private key path construction in production code.
-#   P7: Fail-closed throws reference SMS-041 trace-chain ID (SMS §Forbidden
+#   P7: Fail-closed throws reference FS-470-HDS-010-SDS-010-SMS-041 trace-chain ID (SMS §Forbidden
 #       Default paragraphs specify exact throw message format).
 #
 set -euo pipefail
@@ -37,7 +37,7 @@ expect_eval_failure() {
     echo "  FAIL: ${attr} was accepted"
     all_checks_passed=false
   elif grep -Fq "${phrase}" "${stderr_path}"; then
-    echo "  PASS: ${attr} rejected with SMS-041 diagnostic"
+    echo "  PASS: ${attr} rejected with FS-470-HDS-010-SDS-010-SMS-041 diagnostic"
   else
     cat "${stderr_path}" >&2
     echo "  FAIL: ${attr} diagnostic did not contain: ${phrase}"
@@ -52,7 +52,7 @@ expect_json_message() {
   local json
   json="$(eval_json "${attr}")"
   if grep -Fq "${phrase}" <<<"${json}"; then
-    echo "  PASS: ${attr} emitted SMS-041 diagnostic"
+    echo "  PASS: ${attr} emitted FS-470-HDS-010-SDS-010-SMS-041 diagnostic"
   else
     echo "${json}" >&2
     echo "  FAIL: ${attr} did not contain: ${phrase}"
@@ -314,9 +314,9 @@ echo "  Fail-closed guards: ${failclosed_ok} confirmed, ${failclosed_missing} un
 echo ""
 
 # ================================================================
-# Check 8: SMS-041 trace ID in throw messages (SMS §Forbidden Defaults)
+# Check 8: FS-470-HDS-010-SDS-010-SMS-041 trace ID in throw messages (SMS §Forbidden Defaults)
 # ================================================================
-echo "--- Check 8: SMS-041 trace ID in throw/required messages ---"
+echo "--- Check 8: FS-470-HDS-010-SDS-010-SMS-041 trace ID in throw/required messages ---"
 traceid_hits=0
 
 # Search for FS-470-HDS-010-SDS-010-SMS-041 in throw/assertion messages
@@ -334,17 +334,17 @@ if grep -q 'FS-470-HDS-010-SDS-010-SMS-041' "${repo_root}/${flake_file}" 2>/dev/
 fi
 
 if [[ "${traceid_hits}" -gt 0 ]]; then
-  echo "  PASS: SMS-041 trace ID found in ${traceid_hits} source file(s)"
+  echo "  PASS: FS-470-HDS-010-SDS-010-SMS-041 trace ID found in ${traceid_hits} source file(s)"
 else
-  echo "  FAIL: SMS-041 trace ID missing from production throw/assertion messages"
+  echo "  FAIL: FS-470-HDS-010-SDS-010-SMS-041 trace ID missing from production throw/assertion messages"
   all_checks_passed=false
 fi
 echo ""
 
 # ================================================================
-# Check 9: Active missing-field diagnostics carry SMS-041 trace ID
+# Check 9: Active missing-field diagnostics carry FS-470-HDS-010-SDS-010-SMS-041 trace ID
 # ================================================================
-echo "--- Check 9: active missing-field SMS-041 diagnostics ---"
+echo "--- Check 9: active missing-field FS-470-HDS-010-SDS-010-SMS-041 diagnostics ---"
 expect_eval_failure \
   "missingProfileModeResult" \
   "FS-470-HDS-010-SDS-010-SMS-041: network-renderer-wireguard provider contract missing profile.mode"
@@ -510,7 +510,7 @@ echo "  Check 4 (or \"allow\"/\"deny\"):    ${firewall_violations} new violation
 echo "  Check 5 (profile inference):    ${profilemode_violations} new violation(s)"
 echo "  Check 6 (default key path):     ${keypath_violations} new violation(s)"
 echo "  Check 7 (fail-closed guards):   ${failclosed_ok} confirmed, ${failclosed_missing} unverified"
-echo "  Check 8 (SMS-041 trace ID):     $(if [[ ${traceid_hits} -gt 0 ]]; then echo "${traceid_hits} file(s)"; else echo "missing"; fi)"
+echo "  Check 8 (FS-470-HDS-010-SDS-010-SMS-041 trace ID):     $(if [[ ${traceid_hits} -gt 0 ]]; then echo "${traceid_hits} file(s)"; else echo "missing"; fi)"
 echo "  Check 9 (active diagnostics):   profile/key/endpoint/health/firewall"
 echo "  Seeded negatives:              SN1 (wg-egress), SN2 (1.1.1.1), SN3 (300), SN4 (allow)"
 echo "  Total new violations:          ${total_new_violations}"

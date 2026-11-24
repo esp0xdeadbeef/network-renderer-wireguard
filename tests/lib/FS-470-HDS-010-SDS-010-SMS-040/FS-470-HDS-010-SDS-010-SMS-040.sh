@@ -140,7 +140,7 @@ mkdir -p "${sn1_dir}"
 cat > "${sn1_dir}/wg-mixed.conf" << 'SN1EOF'
 # VIOLATION: Bootstrap payload (PrivateKey, endpoint) mixed with
 # runtime configuration (AllowedIPs, PersistentKeepalive) in same file.
-# Per SMS-040, these must be in separate files (wg-bootstrap.conf vs wg-runtime.conf).
+# Per FS-470-HDS-010-SDS-010-SMS-040, these must be in separate files (wg-bootstrap.conf vs wg-runtime.conf).
 [Interface]
 PrivateKey = aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789abc=
 Address = 10.47.0.2/32
@@ -206,7 +206,7 @@ sn2_dir="${tmp_dir}/sn2-leaked-key"
 mkdir -p "${sn2_dir}"
 cat > "${sn2_dir}/wg-public.conf" << 'SN2EOF'
 # VIOLATION: World-readable runtime configuration file containing
-# raw PrivateKey from bootstrap payload. Per SMS-040, the PrivateKey
+# raw PrivateKey from bootstrap payload. Per FS-470-HDS-010-SDS-010-SMS-040, the PrivateKey
 # must only appear in restricted-permission files (0600), not in
 # world-readable configs.
 [Interface]

@@ -45,7 +45,8 @@
 
           # Build per-overlay WG node configs from CPM model.
           # Accepts pre-compiled CPM output (controlPlane) and
-          # WG overlay data (wgInventory, extracted from CPM model) — satisfies SMS-021.
+          # WG overlay data (wgInventory, extracted from CPM model) — satisfies
+          # FS-470-HDS-010-SDS-010-SMS-021.
           buildWireGuardNodeConfigs =
             { canonicalSites, wgInventory, providerRuntimeModuleFor, pkgs, lib, providerContracts ? null, }:
             let

@@ -246,15 +246,15 @@ generated_peer_missing_endpoint_errors="$(eval_json generatedPeerMissingEndpoint
 grep -Fq "generated-peer peers require endpoint" <<<"${generated_peer_missing_endpoint_errors}" || \
   fail "generated-peer missing endpoint assertion missing"
 grep -Fq "FS-470-HDS-010-SDS-010-SMS-041" <<<"${generated_peer_missing_endpoint_errors}" || \
-  fail "generated-peer missing endpoint assertion must carry SMS-041 trace ID"
+  fail "generated-peer missing endpoint assertion must carry FS-470-HDS-010-SDS-010-SMS-041 trace ID"
 
 generated_peer_missing_private_key_errors="$(eval_json generatedPeerMissingPrivateKeyErrors)"
 grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: network-renderer-wireguard generated-peer mode requires profile.generatedPeer.privateKeyFile" <<<"${generated_peer_missing_private_key_errors}" || \
-  fail "generated-peer missing private key assertion must carry SMS-041 trace ID"
+  fail "generated-peer missing private key assertion must carry FS-470-HDS-010-SDS-010-SMS-041 trace ID"
 
 health_check_missing_target_errors="$(eval_json healthCheckMissingTargetErrors)"
 grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: health check target required by CPM provider contract" <<<"${health_check_missing_target_errors}" || \
-  fail "health-check missing target assertion must carry SMS-041 trace ID"
+  fail "health-check missing target assertion must carry FS-470-HDS-010-SDS-010-SMS-041 trace ID"
 
 health_check_missing_interval_errors="$(eval_json healthCheckMissingIntervalErrors)"
 grep -Fq "network-renderer-wireguard health check requires services.healthCheck.interval when enabled" <<<"${health_check_missing_interval_errors}" || \
@@ -286,7 +286,7 @@ fi
 
 firewall_missing_action_errors="$(eval_json firewallMissingActionErrors)"
 grep -Fq "FS-470-HDS-010-SDS-010-SMS-041: firewall rule action required by CPM provider contract, cannot default to allow or deny" <<<"${firewall_missing_action_errors}" || \
-  fail "firewall missing action assertion must carry SMS-041 trace ID"
+  fail "firewall missing action assertion must carry FS-470-HDS-010-SDS-010-SMS-041 trace ID"
 
 name_inference="$(eval_json nameInference)"
 for phrase in \

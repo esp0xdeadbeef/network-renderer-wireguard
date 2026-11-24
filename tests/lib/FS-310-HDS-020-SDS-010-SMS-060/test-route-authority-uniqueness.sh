@@ -78,7 +78,7 @@ fi
 
 if [[ "$(jq -r '.conflictRejected' "${out}")" != "true" ]]; then
   printf 'FAIL %s: two peers on one interface both claim 0.0.0.0/0 and the renderer emitted both\n' "${trace_id}" >&2
-  printf '  SMS-060: one route authority shall have one semantic next-hop set; different next-hop sets shall fail.\n' >&2
+  printf '  FS-310-HDS-020-SDS-010-SMS-060: one route authority shall have one semantic next-hop set; different next-hop sets shall fail.\n' >&2
   exit 1
 fi
 
