@@ -1,45 +1,63 @@
 #!/usr/bin/env bash
 # GAMP-SCOPE: software-module-test
 #
-# S88 IMPORT-GRAPH COHERENCE -- three declarations compared against the graph
-# the evaluator will actually build.
+# S88 IMPORT-GRAPH COHERENCE -- declarations compared against the dependency
+# graph the runtime will actually build. Nix and Python are both resolved.
 #
 # WHY THIS IS NOT A KEYWORD CHECK
 # ------------------------------
-# The earlier version of this file grepped for `readDir` and for level names. That
-# proves a string is absent, not that a boundary holds. This file resolves every
-# relative `import` under `s88/`, builds the dependency graph, and then compares
-# THREE independently produced artifacts against it:
+# Grepping for level names or for `readDir` proves a string is present or absent.
+# This file resolves every relative dependency under a level tree -- `.nix` path
+# tokens and Python `import`/`from` statements -- builds the graph, and compares
+# it against three independently produced declarations:
 #
-#   A. the S88 level claimed for a file in TRACE.md
-#   B. the level the import graph actually places that file in
-#   C. the entrypoints the flake and the level facades actually reach
+#   A. the boundary statement (`s88/README.md`) against the level directories
+#   B. the level order against the direction of every edge
+#   C. the S88 LAYER declared per file in TRACE.md, where one exists
 #
-# A disagreement between any two of them is the defect. Nothing below asserts on
-# a substring in a comment.
+# and against the only thing that decides whether a file runs at all:
 #
-# THE THREE CHECKS
-# ----------------
-# G1  No upward dependency. A file whose graph level is EquipmentModule must not
-#     import a file whose graph level is Unit: authority flows downward, and a
-#     responsibility level that depends on a decision level can no longer be
-#     changed without changing the decision.
+#   D. reachability from a real entrypoint
 #
-# G2  Declared layer equals graph layer. TRACE.md assigns every policy-routing
-#     source file an `S88 LAYER`. A row is coherent only if the level it names is
-#     reachable from that level's facade and not only from a deeper one.
+# A disagreement between any two of them is the defect.
 #
-# G3  Nothing decorative. Every `s88/` file must be reachable from a real
-#     entrypoint (`flake.nix` or a level facade). A file that nothing imports is
-#     the "decoration" case: the directory still reads as authoritative while the
-#     live code is elsewhere.
+# THE CHECKS
+# ----------
+# G0  A boundary statement exists and describes every level directory present.
+# G1  No upward dependency: a lower level must not import a higher one. Authority
+#     flows downward, so a responsibility level that depends on a decision level
+#     can no longer be changed without changing the decision.
+# G2  The S88 LAYER TRACE.md declares for a file matches where the graph places
+#     it. Only checked where TRACE.md exists.
+# G3  Every level-tree file is reachable from an entrypoint. Files loaded through
+#     a CONSTRUCTED path are reported separately -- they are a different defect
+#     with a different owner, and folding them in would make one of the two
+#     verdicts wrong.
+#
+# This file is byte-identical in every renderer. Do not fork it per repository: a
+# divergent copy is how a class of checks stops running without anybody noticing.
+# If the contract must change, change it here and copy the same file everywhere
+# in the same change (`scripts/lib/discover-tests.sh` states the same rule).
 #
 # Evidence boundary: construction. Static file reads and path resolution only.
-# No evaluation, no build, no lab, no network.
+# No build, no lab, no network.
 set -euo pipefail
 
-repo_root="${SMS_TEST_REPO_ROOT:-$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)}"
+# Resolve the repository root without relying on the caller.
+#
+# Do not write this as `${VAR:-$(git ... || cd ... && pwd)}`: `a || b && c` runs
+# `c` even when `a` succeeds, so the value is the git output AND the pwd output --
+# two lines, and every `-d` test then silently fails.
+if [[ -n "${SMS_TEST_REPO_ROOT:-}" ]]; then
+  repo_root="${SMS_TEST_REPO_ROOT}"
+else
+  repo_root="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [[ -z "${repo_root}" ]]; then
+    repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  fi
+fi
 if [[ -f "${repo_root}/tests/lib/direct-test-guard.sh" ]]; then
+  # shellcheck source=/dev/null
   source "${repo_root}/tests/lib/direct-test-guard.sh" 2>/dev/null || true
 fi
 
@@ -58,104 +76,38 @@ level_rank() {
   esac
 }
 
-# The level a path is placed in by its location. Used for files TRACE.md does not
-# describe and for targets of an edge.
-level_of_path() {
-  local rel="$1" part
-  case "${rel}" in
-    s88/*)
-      part="$(cut -d/ -f2 <<<"${rel}")"
-      case "${part}" in
-        Enterprise) echo Enterprise ;;
-        Site) echo Site ;;
-        Area) echo Area ;;
-        ProcessCell) echo ProcessCell ;;
-        Unit) echo Unit ;;
-        EquipmentModule) echo EquipmentModule ;;
-        ControlModule) echo ControlModule ;;
-        *) echo "" ;;
-      esac
-      ;;
+# Directory spellings accepted in a tree, declared rather than guessed so a new
+# spelling is a change to this file and not a silent tolerance.
+canonical_level_for_dir() {
+  case "$1" in
+    Enterprise | enterprise) echo "Enterprise" ;;
+    Site | site) echo "Site" ;;
+    Area | area) echo "Area" ;;
+    ProcessCell | processcell | process_cell) echo "ProcessCell" ;;
+    Unit | unit) echo "Unit" ;;
+    EquipmentModule | equipmentmodule | equipment_module | EM) echo "EquipmentModule" ;;
+    ControlModule | controlmodule | control_module | CM) echo "ControlModule" ;;
     *) echo "" ;;
   esac
 }
 
-# ---------------------------------------------------------------------------
-# Resolve the `import` targets of one file.
-#
-# Only the forms this tree uses are resolved, and each unresolved form is
-# reported rather than ignored: an import the resolver cannot follow would make
-# G3 claim a file is decorative when it is not.
-# ---------------------------------------------------------------------------
-imports_of() {
-  local file="$1" dir raw target dirname_of
-  dir="$(dirname "${file}")"
-
-  # Match relative path TOKENS, not `import <path>` prefixes. A file listed in a
-  # Nix list (`imports = [ ../../Unit/module/host-network.nix ];`) is a dependency
-  # the evaluator will follow, and a prefix-anchored match misses it. Anything
-  # that is not a relative path is skipped; anything that does not resolve to an
-  # existing file is skipped rather than guessed.
-  {
-    grep -oE '(\.\.?/)+[A-Za-z0-9._/-]+\.nix' "${file}" 2>/dev/null || true
-  } |
-    sort -u |
-    while IFS= read -r raw; do
-      [[ -n "${raw}" ]] || continue
-      target="$(realpath -m "${dir}/${raw}" 2>/dev/null || true)"
-      [[ -n "${target}" ]] || continue
-      [[ -d "${target}" ]] && target="${target}/default.nix"
-      [[ -f "${target}" ]] || continue
-      printf 'EDGE\t%s\t%s\n' "${file}" "${target}"
-    done || true
-
-  # Non-relative imports cannot be resolved statically. Report them so a
-  # dependency cannot hide behind one.
-  grep -oE "import[[:space:]]+\(?[^ ({;]+" "${file}" 2>/dev/null |
-    sed -E 's/^import[[:space:]]+\(?//' |
-    while IFS= read -r raw; do
-      [[ -n "${raw}" ]] || continue
-      case "${raw}" in
-        ./* | ../* ) continue ;;
-        import | "" ) continue ;;
-        *) printf 'UNRESOLVED\t%s\t%s\n' "${file}" "${raw}" ;;
-      esac
-    done || true
-
-  return 0
+# Level of a path, relative to the repository. Understands every tree root this
+# fleet uses, so a renderer that keeps its level code under a generator directory
+# is measured the same way as one that keeps it at `s88/`.
+level_of_path() {
+  local rel="$1" rest part
+  for root in s88 clabgen/s88 implementation/s88; do
+    case "${rel}" in
+      "${root}"/*)
+        rest="${rel#"${root}"/}"
+        part="$(cut -d/ -f1 <<<"${rest}")"
+        canonical_level_for_dir "${part}"
+        return 0
+        ;;
+    esac
+  done
+  echo ""
 }
-
-# ---------------------------------------------------------------------------
-# Build edges and unresolved list once.
-# ---------------------------------------------------------------------------
-mapfile -t s88_files < <(find "${repo_root}/s88" -name '*.nix' -type f | LC_ALL=C sort)
-
-edges_file="$(mktemp)"
-unresolved_file="$(mktemp)"
-trap 'rm -f "${edges_file}" "${unresolved_file}"' EXIT
-
-raw_file="$(mktemp)"
-
-# Scan the repository entrypoints as well as `s88/`. Edges out of `flake.nix`
-# are the reason several s88 files are reachable at all: with only `s88/` scanned,
-# everything the flake imports directly looked orphaned.
-scan_files=("${s88_files[@]}")
-[[ -f "${repo_root}/flake.nix" ]] && scan_files+=("${repo_root}/flake.nix")
-
-for file in "${scan_files[@]}"; do
-  imports_of "${file}" >>"${raw_file}" || true
-done
-
-grep '^UNRESOLVED' "${raw_file}" >"${unresolved_file}" 2>/dev/null || true
-grep '^EDGE' "${raw_file}" >"${edges_file}" 2>/dev/null || true
-rm -f "${raw_file}"
-
-echo "--- S88-GRAPH: declarations vs the resolved import graph ---"
-echo ""
-echo "  s88/ source files: ${#s88_files[@]}"
-echo "  resolved import edges: $(grep -c '^EDGE' "${edges_file}" 2>/dev/null || echo 0)"
-echo "  unresolved imports: $(grep -c '' "${unresolved_file}" 2>/dev/null || echo 0)"
-echo ""
 
 issues=0
 report_issue() {
@@ -171,43 +123,215 @@ report_issue() {
 
 read_pointer="the workspace ISA-88 architecture note (not in this repository): the level
          table (Control Module = implementation mechanism derived later, Unit =
-         forwarding execution context), and its failure-signature entry 'Reasoning
-         requires reading link names or file names -> authority is being recovered from
-         derivation'. Then s88/ControlModule/render/container-networks/policy-routing/
-         TRACE.md for the declared layer per file."
+         forwarding execution context), the requirement for a per-repository boundary
+         statement, and the failure-signature entry 'Reasoning requires reading link
+         names or file names -> authority is being recovered from derivation'. Where a
+         TRACE.md exists, it is the per-file layer declaration."
+
+echo "--- S88-GRAPH: declarations vs the resolved dependency graph ---"
+echo ""
 
 # ---------------------------------------------------------------------------
-# G0 -- the tree declares its own boundary, and the declaration matches the tree.
+# Discover the level trees this repository carries.
+# ---------------------------------------------------------------------------
+roots=()
+for candidate in s88 clabgen/s88 implementation/s88; do
+  [[ -d "${repo_root}/${candidate}" ]] && roots+=("${candidate}")
+done
+
+if ((${#roots[@]} == 0)); then
+  report_issue "S88-G0" "this repository carries no level tree (s88/, clabgen/s88/, implementation/s88/)" \
+    "the level decomposition is meant to be the same everywhere in the fleet, so only the
+       repository's slice is restated -- not the whole hierarchy. A renderer with no level
+       tree states no slice, and the level vocabulary it uses in code cannot be reviewed
+       against anything" \
+    "${read_pointer}"
+  echo "FAIL S88-GRAPH: no level tree" >&2
+  exit 1
+fi
+
+echo "  level trees: ${roots[*]}"
+
+# ---------------------------------------------------------------------------
+# File set: every level-tree source, plus the entrypoints. Both languages.
+# ---------------------------------------------------------------------------
+mapfile -t tree_files < <(
+  for root in "${roots[@]}"; do
+    find "${repo_root}/${root}" -type f \( -name '*.nix' -o -name '*.py' \) | LC_ALL=C sort
+  done
+)
+
+nix_count=0
+py_count=0
+for file in ${tree_files[@]+"${tree_files[@]}"}; do
+  case "${file}" in
+    *.nix) nix_count=$((nix_count + 1)) ;;
+    *.py) py_count=$((py_count + 1)) ;;
+  esac
+done
+echo "  source files: ${#tree_files[@]} (nix ${nix_count}, python ${py_count})"
+
+# ---------------------------------------------------------------------------
+# Resolvers.
 #
-# This is the one check here that compares a DOCUMENT to the tree rather than the
-# tree to itself. It is included because the workspace note makes the boundary
-# file a requirement, and a requirement with no check is a convention.
+# Nix: match relative path TOKENS, not `import <path>` prefixes. A file listed in
+# a Nix list (`imports = [ ../../Unit/module/host-network.nix ];`) is a dependency
+# the evaluator follows, and a prefix-anchored match misses it.
+#
+# Python: parse with `ast`, so `from . import x`, `from .sub import y` and
+# absolute package imports all resolve to real files.
+# ---------------------------------------------------------------------------
+nix_edges_of() {
+  local file="$1" dir raw target
+  dir="$(dirname "${file}")"
+  while IFS= read -r raw; do
+    [[ -n "${raw}" ]] || continue
+    target="$(realpath -m "${dir}/${raw}" 2>/dev/null || true)"
+    [[ -n "${target}" ]] || continue
+    [[ -d "${target}" ]] && target="${target}/default.nix"
+    [[ -f "${target}" ]] || continue
+    printf 'EDGE\t%s\t%s\n' "${file}" "${target}"
+  done < <(grep -oE '(\.\.?/)+[A-Za-z0-9._/-]+\.nix' "${file}" 2>/dev/null | sort -u || true)
+  return 0
+}
+
+python_edges_of() {
+  local root="$1"
+  python3 - "${root}" <<'PY' 2>/dev/null || true
+import ast, os, sys
+
+root = os.path.realpath(sys.argv[1])
+roots = [os.path.join(root, r) for r in ("s88", "clabgen/s88", "implementation/s88")]
+
+def candidates(base, dotted):
+    parts = dotted.split(".") if dotted else []
+    path = os.path.join(base, *parts) if parts else base
+    return [path + ".py", os.path.join(path, "__init__.py")]
+
+def emit(src, target):
+    if os.path.isfile(target):
+        print("EDGE\t%s\t%s" % (src, os.path.realpath(target)))
+
+for tree in roots:
+    if not os.path.isdir(tree):
+        continue
+    for dirpath, _dirnames, filenames in os.walk(tree):
+        for name in filenames:
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(dirpath, name)
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    parsed = ast.parse(fh.read(), filename=path)
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            for node in ast.walk(parsed):
+                if isinstance(node, ast.ImportFrom):
+                    base = os.path.dirname(path)
+                    if node.level:
+                        for _ in range(node.level - 1):
+                            base = os.path.dirname(base)
+                        mods = [node.module] if node.module else []
+                        if not node.module:
+                            mods = [a.name for a in node.names]
+                    else:
+                        if not node.module:
+                            continue
+                        base = root
+                        mods = [node.module]
+                    for mod in mods:
+                        for target in candidates(base, mod.replace(".", os.sep)):
+                            emit(path, target)
+                        # `from pkg import sub` usually imports the SUBMODULE
+                        # `pkg.sub`, not a symbol, so it is a dependency too.
+                        for alias in node.names:
+                            for target in candidates(base, os.path.join(mod.replace(".", os.sep), alias.name)):
+                                emit(path, target)
+                elif isinstance(node, ast.Import):
+                    for alias in node.names:
+                        for target in candidates(root, alias.name.replace(".", os.sep)):
+                            emit(path, target)
+PY
+  return 0
+}
+
+mapfile -t entrypoints < <(
+  [[ -f "${repo_root}/flake.nix" ]] && echo "${repo_root}/flake.nix"
+  for root in "${roots[@]}"; do
+    for level in "${levels[@]}"; do
+      [[ -f "${repo_root}/${root}/${level}/api/default.nix" ]] && echo "${repo_root}/${root}/${level}/api/default.nix"
+    done
+  done
+  # Python renderers are driven by a script or module at or near the root.
+  find "${repo_root}" -maxdepth 2 -type f -name '*.py' -not -path '*/s88/*' -not -path '*/tests/*' \
+    -not -path '*/.git/*' 2>/dev/null | LC_ALL=C sort
+)
+
+# ---------------------------------------------------------------------------
+# Entrypoints: the flake, every level facade, and the repository's own scripts.
+# A file reachable from any of them is load-bearing; the rest is decoration.
+# ---------------------------------------------------------------------------
+edges_file="$(mktemp)"
+trap 'rm -f "${edges_file}"' EXIT
+
+# Entrypoints contribute edges as well. `flake.nix` is the reason several level
+# files are reachable at all: with only the tree scanned, everything the flake
+# imports directly looks orphaned.
+scan_files=()
+for file in ${tree_files[@]+"${tree_files[@]}"}; do scan_files+=("${file}"); done
+for file in ${entrypoints[@]+"${entrypoints[@]}"}; do scan_files+=("${file}"); done
+
+for file in "${scan_files[@]}"; do
+  case "${file}" in
+    *.nix) nix_edges_of "${file}" ;;
+  esac
+done >>"${edges_file}" || true
+
+# Called once with the repository root: the resolver walks every level tree it
+# knows about, and absolute package imports (`from clabgen.s88.site import x`)
+# only resolve from there.
+python_edges_of "${repo_root}" >>"${edges_file}" || true
+
+# One dependency stated two ways is still one edge.
+sort -u "${edges_file}" -o "${edges_file}"
+
+echo "  entrypoints:  ${#entrypoints[@]}"
+echo "  edges:        $(grep -c '^EDGE' "${edges_file}" 2>/dev/null || true)"
+echo ""
+
+# ---------------------------------------------------------------------------
+# G0 -- the boundary statement exists and describes the tree.
 # ---------------------------------------------------------------------------
 boundary=""
-[[ -f "${repo_root}/s88/README.md" ]] && boundary="${repo_root}/s88/README.md"
+for root in "${roots[@]}"; do
+  [[ -f "${repo_root}/${root}/README.md" ]] && boundary="${repo_root}/${root}/README.md" && break
+done
+[[ -n "${boundary}" ]] || { [[ -f "${repo_root}/s88/README.md" ]] && boundary="${repo_root}/s88/README.md"; }
 
 if [[ -z "${boundary}" ]]; then
-  report_issue "S88-G0" "s88/ has no README.md boundary statement" \
+  report_issue "S88-G0" "no boundary statement for ${roots[*]}" \
     "the workspace note requires a per-repository boundary file and lists the
-       repositories that lack one. Without it, the level shape below cannot be read
-       against a declaration -- only against itself." \
+       repositories that lack one. Without it the level shape below can only be
+       compared with itself." \
     "${read_pointer}"
 else
   undescribed=()
-  for dir in "${repo_root}/s88"/*/; do
-    [[ -d "${dir}" ]] || continue
-    name="$(basename "${dir}")"
-    [[ -n "$(level_of_path "s88/${name}/x")" ]] || continue
-    grep -qE "(^|[^A-Za-z])${name}([^A-Za-z]|$)" "${boundary}" || undescribed+=("${name}")
+  for root in "${roots[@]}"; do
+    for dir in "${repo_root}/${root}"/*/; do
+      [[ -d "${dir}" ]] || continue
+      name="$(basename "${dir}")"
+      [[ -n "$(canonical_level_for_dir "${name}")" ]] || continue
+      grep -qE "(^|[^A-Za-z])${name}([^A-Za-z]|$)" "${boundary}" || undescribed+=("${root}/${name}")
+    done
   done
   if ((${#undescribed[@]} > 0)); then
-    report_issue "S88-G0" "s88/README.md does not describe: ${undescribed[*]}" \
+    report_issue "S88-G0" "${boundary#"${repo_root}/"} does not describe: ${undescribed[*]}" \
       "each level directory is a claim about responsibility placement. An undescribed
          directory is structure nobody owns: either intentional and unrecorded, or
          leftover from a move." \
       "${read_pointer}"
   else
-    echo "PASS G0: s88/README.md describes every level directory present"
+    echo "PASS G0: ${boundary#"${repo_root}/"} describes every level directory present"
   fi
 fi
 
@@ -217,41 +341,31 @@ fi
 upward=0
 while IFS=$'\t' read -r tag from to; do
   [[ "${tag}" == "EDGE" ]] || continue
-  from_rel="${from#"${repo_root}/"}"
-  to_rel="${to#"${repo_root}/"}"
-  from_level="$(level_of_path "${from_rel}")"
-  to_level="$(level_of_path "${to_rel}")"
+  from_level="$(level_of_path "${from#"${repo_root}/"}")"
+  to_level="$(level_of_path "${to#"${repo_root}/"}")"
   [[ -n "${from_level}" && -n "${to_level}" ]] || continue
-  from_rank="$(level_rank "${from_level}")"
-  to_rank="$(level_rank "${to_level}")"
-  if ((to_rank < from_rank)); then
+  if (( $(level_rank "${to_level}") < $(level_rank "${from_level}") )); then
     upward=$((upward + 1))
-    report_issue "S88-G1" "${from_rel} (${from_level}) imports ${to_rel} (${to_level})" \
-      "the target is higher in the hierarchy. Authority flows downward: a lower level
-         that depends on a higher one makes the implementation depend on the decision it
-         is supposed to execute, so the decision can no longer move independently." \
+    report_issue "S88-G1" "${from#"${repo_root}/"} (${from_level}) imports ${to#"${repo_root}/"} (${to_level})" \
+      "the target is higher in the hierarchy. Authority flows downward: a lower level that
+         depends on a higher one makes the implementation depend on the decision it is
+         supposed to execute, so the decision can no longer move independently." \
       "${read_pointer}"
   fi
 done <"${edges_file}"
 
-((upward == 0)) && echo "PASS G1: no upward dependency in ${#s88_files[@]} files"
+((upward == 0)) && echo "PASS G1: no upward dependency among ${#tree_files[@]} files"
 
 # ---------------------------------------------------------------------------
 # G2 -- TRACE.md's declared layer must agree with the graph.
 #
-# The check is not "does the row contain the level name". It is: the file must be
-# reachable from that level's facade. A file declared ControlModule that only the
-# Unit facade reaches is declared at the level that consumes it, not the level
-# that owns it.
+# Not "does the row contain the level name": the file must be reachable from that
+# level's facade, and it must live under it.
 # ---------------------------------------------------------------------------
-report_note="$(mktemp)"
-trap 'rm -f "${edges_file}" "${unresolved_file}" "${report_note}"' EXIT
-trace_file="${repo_root}/s88/ControlModule/render/container-networks/policy-routing/TRACE.md"
-if [[ -f "${trace_file}" ]]; then
-  # Reachability from each level facade.
-  declare -A reached_from_facade=()
+declare -A reached_from_facade=()
+for root in "${roots[@]}"; do
   for level in "${levels[@]}"; do
-    facade="${repo_root}/s88/${level}/api/default.nix"
+    facade="${repo_root}/${root}/${level}/api/default.nix"
     [[ -f "${facade}" ]] || continue
     queue=("${facade}")
     declare -A seen=()
@@ -266,12 +380,16 @@ if [[ -f "${trace_file}" ]]; then
       done <"${edges_file}"
     done
     for reached in "${!seen[@]}"; do
-      rel="${reached#"${repo_root}/"}"
-      reached_from_facade["${rel}"]+="${level},"
+      reached_from_facade["${reached#"${repo_root}/"}"]+="${level},"
     done
   done
+done
 
-  mismatches=0
+trace_checked=0
+while IFS= read -r trace_file; do
+  [[ -n "${trace_file}" ]] || continue
+  trace_dir="$(dirname "${trace_file}")"
+  trace_checked=$((trace_checked + 1))
   while IFS= read -r row; do
     [[ -n "${row}" ]] || continue
     IFS='|' read -r _ path declared _why <<<"${row}"
@@ -279,62 +397,43 @@ if [[ -f "${trace_file}" ]]; then
     declared="$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' <<<"${declared}")"
     [[ -n "${path}" && -e "${repo_root}/${path}" ]] || continue
 
-    # The lowest level named in the declared layer is the owner.
     declared_owner=""
     for level in "${levels[@]}"; do
       grep -qE "(^|[^A-Za-z])${level}([^A-Za-z]|$)" <<<"${declared}" && declared_owner="${level}"
     done
     [[ -n "${declared_owner}" ]] || continue
 
-    reached_by="${reached_from_facade["${path}"]:-}"
     placed_in="$(level_of_path "${path}")"
+    reached_by="${reached_from_facade["${path}"]:-}"
 
     if [[ -z "${reached_by}" ]]; then
-      mismatches=$((mismatches + 1))
       report_issue "S88-G2" "${path} is declared ${declared_owner} but no level facade reaches it" \
-        "a declared layer with no path from any facade means the code runs, if at all,
-           from somewhere the hierarchy does not describe. The declaration and the graph
-           disagree, and only one of them can be true." \
+        "a declared layer with no path from any facade means the code runs, if at all, from
+           somewhere the hierarchy does not describe." \
         "${read_pointer}"
     elif [[ -n "${placed_in}" && "${placed_in}" != "${declared_owner}" ]]; then
-      mismatches=$((mismatches + 1))
-      report_issue "S88-G2" "${path} is declared ${declared_owner} but lives under s88/${placed_in}/" \
-        "the row names one level and the file sits in another. A responsibility level is
-           both a declaration and a placement; when they disagree, the trace sends a
-           reader to the wrong layer and the directory sends them to the wrong owner." \
+      report_issue "S88-G2" "${path} is declared ${declared_owner} but lives under ${placed_in}/" \
+        "the row names one level and the file sits in another. When the declaration and the
+           placement disagree, the trace sends a reader to the wrong layer." \
         "${read_pointer}"
     fi
+  done < <(grep -E '^\|[[:space:]]*`?[A-Za-z0-9_./-]+\.(nix|py)`?[[:space:]]*\|' "${trace_file}" || true)
+done < <(find "${repo_root}" -name 'TRACE.md' -not -path '*/.git/*' 2>/dev/null | LC_ALL=C sort)
 
-    # Reachability from the declared level is reported, not failed: a lower level
-    # may legitimately compose a higher one (Unit reaching ControlModule is the
-    # documented chain), so the useful fact is WHICH facade actually composes it.
-    [[ -n "${reached_by}" ]] && printf '  %s declared %s, composed by %s\n' \
-      "${path##*/}" "${declared_owner}" "${reached_by%,}" >>"${report_note}"
-  done < <(grep -E "^\|[[:space:]]*\`?s88/" "${trace_file}" || true)
-
-  ((mismatches == 0)) && echo "PASS G2: every TRACE.md declared layer matches the graph"
-else
+if ((trace_checked == 0)); then
   echo "  note: no TRACE.md in this repository; G2 not applicable"
+elif ((issues == 0)); then
+  echo "PASS G2: declared layers match the graph"
+elif ! grep -q '^ISSUE S88-G2' <<<"$(printf '%s' "${issues}")" 2>/dev/null; then
+  echo "PASS G2: declared layers match the graph"
 fi
 
 # ---------------------------------------------------------------------------
 # G3 -- decoration.
-#
-# Entrypoints are the flake and every level facade. A file reachable from none of
-# them is present but not load-bearing; the directory claims a responsibility that
-# nothing executes.
 # ---------------------------------------------------------------------------
-mapfile -t entrypoints < <(
-  [[ -f "${repo_root}/flake.nix" ]] && echo "${repo_root}/flake.nix"
-  for level in "${levels[@]}"; do
-    facade="${repo_root}/s88/${level}/api/default.nix"
-    [[ -f "${facade}" ]] && echo "${facade}"
-  done
-)
-
 declare -A reachable=()
 queue=()
-for entry in "${entrypoints[@]}"; do
+for entry in ${entrypoints[@]+"${entrypoints[@]}"}; do
   queue+=("${entry}")
 done
 while ((${#queue[@]} > 0)); do
@@ -349,65 +448,51 @@ while ((${#queue[@]} > 0)); do
 done
 
 decorative=()
-for file in "${s88_files[@]}"; do
+for file in ${tree_files[@]+"${tree_files[@]}"}; do
   [[ -n "${reachable[${file}]:-}" ]] || decorative+=("${file#"${repo_root}/"}")
 done
 
-# ---------------------------------------------------------------------------
-# Separate a genuinely orphaned file from one loaded through a CONSTRUCTED path.
-#
-# The resolver follows literal paths. `import policyModulePath` and
-# `profilesDir + "/${roleName}.nix"` are followed by the evaluator but not by any
-# static resolver, so a file reached that way is not an orphan -- it is loaded
-# through a string the model never names. That is a different defect with a
-# different owner, so it is reported separately instead of being folded into
-# either verdict.
-#
-# Detection: the file's directory (or an ancestor inside its level) appears as a
-# literal path fragment elsewhere in `s88/`. That is the mechanism the constructed
-# path is built from.
-# ---------------------------------------------------------------------------
+# A file loaded from a CONSTRUCTED path is followed by the runtime but not by any
+# static resolver. Detection: the file's directory (depth >= 3, so an unrelated
+# sibling cannot match) appears as a literal fragment in a file that IS reachable.
+# A constructed path inside a file nothing imports is not a mechanism, it is two
+# orphans.
 dynamic=()
 orphaned=()
 for file in ${decorative[@]+"${decorative[@]}"}; do
   loaded_dynamically=0
   dir="${file%/*}"
-  # Walk up to, but not past, the level directory.
   for _ in 1 2 3 4 5; do
-    fragment="${dir#s88/}"
-    [[ "${fragment}" == "${dir}" ]] && break
-    # The level name alone is too broad to be evidence; a sub-path is not. And
-    # the REFERRER must itself be reachable: a constructed path inside a file
-    # nothing imports is not a mechanism, it is two orphans.
-    # Depth >= 3 (Level/group/subgroup). A two-segment fragment such as
-    # `ControlModule/module` also matches an unrelated sibling under that
-    # directory and misattributes the mechanism -- measured: it blamed a literal
-    # `public-ingress.nix` import for `host-validation.nix`, which nothing imports.
-    if [[ "$(awk -F/ '{print NF}' <<<"${fragment}")" -ge 3 ]]; then
-      while IFS= read -r referrer; do
-        [[ -n "${referrer}" ]] || continue
-        [[ "${referrer}" == "${repo_root}/${file}" ]] && continue
-        if [[ -n "${reachable[${referrer}]:-}" ]]; then
-          loaded_dynamically=1
-          dynamic+=("${file}  <- constructed from '${fragment}' in ${referrer#"${repo_root}/"}")
-          break
-        fi
-      done < <(grep -rlF "${fragment}" "${repo_root}/s88" --include='*.nix' 2>/dev/null || true)
-      ((loaded_dynamically == 1)) && break
-    fi
+    for root in "${roots[@]}"; do
+      case "${dir}" in
+        "${root}"/*) fragment="${dir#"${root}"/}" ;;
+        *) continue ;;
+      esac
+      if [[ "$(awk -F/ '{print NF}' <<<"${fragment}")" -ge 3 ]]; then
+        while IFS= read -r referrer; do
+          [[ -n "${referrer}" ]] || continue
+          [[ "${referrer}" == "${repo_root}/${file}" ]] && continue
+          if [[ -n "${reachable[${referrer}]:-}" ]]; then
+            loaded_dynamically=1
+            dynamic+=("${file}  <- constructed from '${fragment}' in ${referrer#"${repo_root}/"}")
+            break
+          fi
+        done < <(grep -rlF "${fragment}" "${repo_root}/${root}" --include='*.nix' --include='*.py' 2>/dev/null || true)
+      fi
+    done
+    ((loaded_dynamically == 1)) && break
     [[ "${dir}" == */* ]] || break
     dir="${dir%/*}"
   done
-
   ((loaded_dynamically == 1)) || orphaned+=("${file}")
 done
 
 if ((${#dynamic[@]} > 0)); then
   {
-    echo "  ${#dynamic[@]} file(s) are reachable only through a constructed path:"
+    echo "  ${#dynamic[@]} file(s) reachable only through a constructed path:"
     printf '    %s\n' "${dynamic[@]}"
-    echo "  (this is the sidecar pattern the workspace note calls 'uncontrolled sidecars':"
-    echo "   the loaded set is a property of the file system, not of the model)"
+    echo "  (the 'uncontrolled sidecar' shape: the loaded set is a property of the file"
+    echo "   system, not of the model)"
     echo
   } >&2
 fi
@@ -419,9 +504,10 @@ if ((${#orphaned[@]} > 0)); then
     [[ -n "${level}" ]] || level="(outside a level)"
     by_level["${level}"]=$(( ${by_level["${level}"]:-0} + 1 ))
   done
-  report_issue "S88-G3" "${#orphaned[@]} of ${#s88_files[@]} s88/ files are unreachable by any path, literal or constructed"     "an unreachable file still reads as authoritative to a reviewer, and nothing executes
-       it. This graph resolves imports transitively and separately accounts for files loaded
-       from a constructed path, so an entry here is not a resolver artefact." \
+  report_issue "S88-G3" "${#orphaned[@]} of ${#tree_files[@]} level-tree files are unreachable from any entrypoint" \
+    "an unreachable file still reads as authoritative to a reviewer and nothing executes it.
+       This graph resolves both languages transitively and accounts for constructed paths
+       separately, so an entry here is not a resolver artefact." \
     "${read_pointer}"
   {
     echo "  orphaned by level:"
@@ -432,18 +518,17 @@ if ((${#orphaned[@]} > 0)); then
     printf '    %s\n' "${orphaned[@]}"
   } >&2
 else
-  echo "PASS G3: every s88/ file is reachable (literal ${#s88_files[@]} resolved, ${#dynamic[@]} by constructed path)"
+  echo "PASS G3: every level-tree file is reachable (${#tree_files[@]} resolved, ${#dynamic[@]} by constructed path)"
 fi
 
 # ---------------------------------------------------------------------------
-# Seeded negative -- the resolver and the direction check must be able to fail.
+# Seeded negatives -- both resolvers and both graph checks must be able to fail.
 # ---------------------------------------------------------------------------
 seeded_root="$(mktemp -d)"
 mkdir -p \
   "${seeded_root}/s88/Unit/lookup" \
   "${seeded_root}/s88/EquipmentModule/mapping" \
-  "${seeded_root}/s88/ControlModule/render" \
-  "${seeded_root}/s88/Unit/api"
+  "${seeded_root}/s88/ControlModule/render"
 
 cat >"${seeded_root}/s88/ControlModule/render/private.nix" <<'NIX'
 { }: { x = 1; }
@@ -454,24 +539,23 @@ NIX
 cat >"${seeded_root}/s88/EquipmentModule/mapping/up.nix" <<'NIX'
 { lib }: import ../../Unit/lookup/down.nix { }
 NIX
-cat >"${seeded_root}/s88/Unit/api/default.nix" <<'NIX'
-{ lib }: import ../lookup/down.nix { inherit lib; }
-NIX
 cat >"${seeded_root}/s88/Unit/lookup/orphan.nix" <<'NIX'
 { }: { orphan = true; }
 NIX
 
+mkdir -p "${seeded_root}/clabgen/s88/enterprise" "${seeded_root}/clabgen/s88/site"
+cat >"${seeded_root}/clabgen/s88/site/base.py" <<'PY'
+VALUE = 1
+PY
+cat >"${seeded_root}/clabgen/s88/enterprise/seeded.py" <<'PY'
+from ..site import base
+PY
+
 seeded_edges="$(mktemp)"
 for file in $(find "${seeded_root}/s88" -name '*.nix' | LC_ALL=C sort); do
-  dir="$(dirname "${file}")"
-  grep -oE "import[[:space:]]+[^ ({;]+" "${file}" 2>/dev/null |
-    sed -E 's/^import[[:space:]]+//' |
-    while IFS= read -r raw; do
-      target="$(realpath -m "${dir}/${raw}")"
-      [[ -d "${target}" ]] && target="${target}/default.nix"
-      [[ -f "${target}" ]] && printf 'EDGE\t%s\t%s\n' "${file}" "${target}"
-    done
-done >"${seeded_edges}" || true
+  nix_edges_of "${file}"
+done >>"${seeded_edges}" || true
+python_edges_of "${seeded_root}" >>"${seeded_edges}" || true
 
 seeded_upward=0
 while IFS=$'\t' read -r tag from to; do
@@ -482,29 +566,27 @@ while IFS=$'\t' read -r tag from to; do
   (( $(level_rank "${tl}") < $(level_rank "${fl}") )) && seeded_upward=$((seeded_upward + 1))
 done <"${seeded_edges}"
 
-seeded_orphan=0
-for file in $(find "${seeded_root}/s88" -name '*.nix'); do
-  rel="${file#"${seeded_root}/"}"
-  grep -q "orphan.nix" "${seeded_edges}" || seeded_orphan=$((seeded_orphan + 1))
-done
+seeded_py="$(grep -c 'clabgen/s88/site/base.py' "${seeded_edges}" 2>/dev/null || true)"
+seeded_orphan="$(grep -c 'orphan.nix' "${seeded_edges}" 2>/dev/null || true)"
 rm -f "${seeded_edges}"
 
-if ((seeded_upward < 1 || seeded_orphan < 1)); then
-  report_issue "S88-G-SEED" "the graph checks did not detect the seeded defects" \
-    "expected >=1 upward edge and >=1 orphan, got upward=${seeded_upward}
-       orphan=${seeded_orphan}. Every PASS this test printed is not evidence" \
-    "tests/test-s88-import-graph-coherence.sh -- imports_of and the G1/G3 loops"
+if ((seeded_upward < 1)) || [[ "${seeded_py}" == "0" ]] || [[ "${seeded_orphan}" != "0" ]]; then
+  report_issue "S88-G-SEED" "a graph check did not behave on the seeded fixture" \
+    "expected >=1 upward edge, >=1 resolved Python edge and 0 edges to the orphan;
+       got upward=${seeded_upward} python_edges=${seeded_py} orphan_edges=${seeded_orphan}.
+       Every PASS this test printed is therefore not evidence" \
+    "tests/test-s88-import-graph-coherence.sh -- nix_edges_of, python_edges_of, G1/G3"
 else
-  echo "PASS S88-G-SEED: detected the seeded upward edge and the seeded orphan"
+  echo "PASS S88-G-SEED: nix and python resolvers detected the seeded upward, python and orphan cases"
 fi
 
 echo ""
 if ((issues > 0)); then
-  echo "FAIL S88-GRAPH: ${issues} coherence issue(s)." >&2
-  echo "  Fix in the layer that owns the behaviour, then re-run. Do not add a" >&2
-  echo "  file to an allowlist: an allowlisted unreachable file is still a lie." >&2
+  echo "FAIL S88-GRAPH: ${issues} coherence issue(s) across ${#roots[@]} tree(s)." >&2
+  echo "  Fix in the layer that owns the behaviour. Do not add a file to an" >&2
+  echo "  allowlist: an allowlisted unreachable file is still a lie." >&2
   exit 1
 fi
 
-echo "PASS S88-GRAPH: declarations and the resolved import graph agree"
+echo "PASS S88-GRAPH: the graph and its declarations agree"
 exit 0
