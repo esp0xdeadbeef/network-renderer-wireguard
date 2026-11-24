@@ -302,15 +302,46 @@
               let
                 canonicalSites = rendererInput.canonicalSites or (throw
                   "${sms022TraceId}: WireGuard hostModule requires the bundle's canonicalSites");
-                canonicalWireGuard = rendererInput.canonicalWireGuard or (throw
-                  "${sms022TraceId}: WireGuard hostModule requires the bundle's canonicalWireGuard");
-                wgInventory = rendererInput.wgInventory or (canonicalWireGuard.providers or { });
-                providerContracts = rendererInput.providerContracts or (canonicalWireGuard.contracts or null);
+                # One canonical collection, with the provider as a FIELD on each
+                # overlay record. The provider-named `canonicalWireGuard` this
+                # replaced published nothing whenever the overlays lived where the
+                # forwarding model puts them, so an empty overlay rendered empty.
+                canonicalOverlays = rendererInput.canonicalOverlays or (throw
+                  "${sms022TraceId}: WireGuard hostModule requires the bundle's canonicalOverlays");
+                # The provider material travels ON the overlay record now, so the
+                # two shapes this renderer's internals use are a projection of one
+                # collection rather than a join of two.
+                byOverlay = canonicalOverlays.byOverlay or { };
+                wgInventory = rendererInput.wgInventory or builtins.mapAttrs
+                  (_: overlay: overlay.providerMaterial or { })
+                  (builtins.filter
+                    (name: (byOverlay.${name}.provider or null) == "wireguard")
+                    (builtins.attrNames byOverlay));
+                wgInventoryByName = builtins.mapAttrs (_: overlay: overlay.providerMaterial or { }) byOverlay;
+                # Contracts are keyed by provider inside this renderer because its
+                # internals read `providerContracts.wireguard`. The namespace is
+                # internal now: the canonical record states the provider per
+                # overlay, and this filter is the only place that name appears.
+                providerContracts = rendererInput.providerContracts or {
+                  wireguard = builtins.listToAttrs (
+                    map
+                      (name: {
+                        inherit name;
+                        value = byOverlay.${name}.providerContract;
+                      })
+                      (builtins.filter
+                        (name:
+                          (byOverlay.${name}.provider or null) == "wireguard"
+                          && (byOverlay.${name}.providerContract or null) != null)
+                        (builtins.attrNames byOverlay))
+                  );
+                };
                 nodeConfigs = buildWireGuardNodeConfigs {
                   inherit canonicalSites;
                   providerRuntimeModuleFor =
                     buildWireGuardProviderRuntimeModule;
-                  inherit wgInventory providerContracts pkgs lib;
+                  inherit providerContracts pkgs lib;
+                  wgInventory = wgInventoryByName;
                 };
 
                 groupedConfigs = lib.foldl (acc:
@@ -369,8 +400,8 @@
                   # contract a renderer is supposed to map.
                   canonicalSites = (bundle.canonical.canonicalSites or (throw
                     "WireGuard renderer requires the bundle's canonicalSites"));
-                  canonicalWireGuard = (bundle.canonical.canonicalWireGuard or (throw
-                    "WireGuard renderer requires the bundle's canonicalWireGuard"));
+                  canonicalOverlays = (bundle.canonical.canonicalOverlays or (throw
+                    "WireGuard renderer requires the bundle's canonicalOverlays"));
                   canonicalBundleIdentity = validated.bundleIdentity;
                   canonicalBindingIdentity = validated.bindingIdentity;
                 });
