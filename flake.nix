@@ -313,12 +313,50 @@
                 # two shapes this renderer's internals use are a projection of one
                 # collection rather than a join of two.
                 byOverlay = canonicalOverlays.byOverlay or { };
-                wgInventory = rendererInput.wgInventory or builtins.mapAttrs
-                  (_: overlay: overlay.providerMaterial or { })
-                  (builtins.filter
-                    (name: (byOverlay.${name}.provider or null) == "wireguard")
-                    (builtins.attrNames byOverlay));
-                wgInventoryByName = builtins.mapAttrs (_: overlay: overlay.providerMaterial or { }) byOverlay;
+                # ONLY the overlays this renderer owns. The bundle states the provider
+                # per overlay record, and a nebula overlay's `providerMaterial` is
+                # non-empty too -- so handing the whole collection to the node builder
+                # made it ask a nebula overlay for WireGuard peers and fail closed:
+                #
+                #   FS-470-HDS-010-SDS-010-SMS-022: WireGuard peers required by
+                #   CPM-preserved wgInventory for inventory overlay garnet
+                #
+                # (garnet is provider "nebula" on the cobalt HAT). The list of nodes
+                # comes from canonicalSites and covers every overlay, which is right:
+                # the filter that answers "is this overlay mine" is this one.
+                wireguardOverlayNames = builtins.filter
+                  (name: (byOverlay.${name}.provider or null) == "wireguard")
+                  (builtins.attrNames byOverlay);
+                wgInventoryByProvider = builtins.listToAttrs (
+                  map
+                    (name: {
+                      inherit name;
+                      value = byOverlay.${name}.providerMaterial or { };
+                    })
+                    wireguardOverlayNames
+                );
+                # A caller may hand the material in directly (the FS-470 construction
+                # cases do). Then it is filtered by the same rule, so a collection that
+                # carries another provider's overlay cannot reintroduce the failure --
+                # and a caller whose bundle publishes no overlay records keeps its map
+                # as-is, which is the legacy shape those cases use.
+                wgInventory =
+                  if builtins.isAttrs (rendererInput.wgInventory or null) then
+                    if byOverlay == { } then
+                      rendererInput.wgInventory
+                    else
+                      builtins.listToAttrs (
+                        map
+                          (name: {
+                            inherit name;
+                            value = rendererInput.wgInventory.${name};
+                          })
+                          (builtins.filter
+                            (name: builtins.hasAttr name rendererInput.wgInventory)
+                            wireguardOverlayNames)
+                      )
+                  else
+                    wgInventoryByProvider;
                 # Contracts are keyed by provider inside this renderer because its
                 # internals read `providerContracts.wireguard`. The namespace is
                 # internal now: the canonical record states the provider per
@@ -342,7 +380,7 @@
                   providerRuntimeModuleFor =
                     buildWireGuardProviderRuntimeModule;
                   inherit providerContracts pkgs lib;
-                  wgInventory = wgInventoryByName;
+                  wgInventory = wgInventory;
                 };
 
                 groupedConfigs = lib.foldl (acc:
