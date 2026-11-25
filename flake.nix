@@ -484,6 +484,35 @@
           };
         };
     in {
+
+      # THE ENVIRONMENT THE TESTS NEED, DECLARED IN THE REPO-ROOT FLAKE.
+      #
+      # The suites shell out to nix, jq and git, and some use rg, ssh and python3.
+      # Declaring them here is what makes the environment cacheable: one derivation
+      # describes it, so CI can build it once and hand the paths to every test job
+      # instead of relying on the runner image plus ad-hoc `curl`s.
+      #
+      # Deliberately no `pkgs.nix`: CI installs its own Nix, and two versions evaluate
+      # the same flake to different derivations, which silently breaks every cache.
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
+        {
+          default = pkgs.mkShell {
+            name = "network-tests";
+            packages = [
+              pkgs.git
+              pkgs.jq
+              pkgs.openssh
+              pkgs.python3
+              pkgs.ripgrep
+              pkgs.zstd
+            ];
+          };
+        }
+      );
       nixosModules.default = import ./modules/wireguard-provider-runtime.nix;
       nixosModules.wireguard-provider-runtime = self.nixosModules.default;
 
