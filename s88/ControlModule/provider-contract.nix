@@ -234,10 +234,14 @@ in
         || routedIPv6Prefixes != [ ]
         || providerOwnedIPv6Prefixes != [ ];
 
+      # FS-320-HDS-050-SDS-010-SMS-010: a named attachment surface is modeled authority.
+      # A default here substituted another surface when the model named none, which is the
+      # failure the row names -- a return route without a declared surface must arrive
+      # without one, not acquire the LAN's.
       normalizedReturnRoutes = map (route: {
         destination = routeField route "destination";
         gateway = routeField route "gateway";
-        interface = route.interface or lanInterface;
+        interface = routeField route "interface";
       }) returnRoutes;
 
       returnRoutesForLan = map (route: {

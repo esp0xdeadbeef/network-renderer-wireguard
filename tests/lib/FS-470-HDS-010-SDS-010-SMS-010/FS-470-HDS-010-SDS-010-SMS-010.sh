@@ -214,6 +214,9 @@ module_json="$(nix eval --impure --no-warn-dirty --json --expr "
       routes.returnRoutes = [{
         destination = \"10.99.50.0/24\";
         gateway = \"10.99.0.1\";
+        # FS-320-HDS-050-SDS-010-SMS-010: the attachment surface is modeled authority, so a
+        # return route declares it; the renderer no longer substitutes the LAN.
+        interface = \"edge-lan0\";
       }];
     };
     module = result.artifacts.nixosModules.providerRuntime;
