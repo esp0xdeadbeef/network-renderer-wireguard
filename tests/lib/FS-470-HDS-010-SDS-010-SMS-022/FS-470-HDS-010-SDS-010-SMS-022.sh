@@ -44,7 +44,7 @@ expect_eval_failure() {
   local rc
 
   set +e
-  output="$(nix eval --raw --impure --file tests/fs470-sms022-wg-cpm-only.nix "${attr}" 2>&1)"
+  output="$(nix eval --raw --impure --file tests/fs470-sms022-wg-cpm-only.nix "${attr}" 2>&1 | grep -vF "you don't have Internet access")"
   rc=$?
   set -e
 
